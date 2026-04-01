@@ -24,17 +24,18 @@
     "analytics:view": "wrangler analytics-engine query"
   },
   "dependencies": {
+    "@cloudflare/kumo": "^1.16.0",
     "@cloudflare/workers-types": "^4.20240221.1",
-    "@hotwire/turbo": "^7.3.0",
-    "hono": "^3.11.7",
+    "@hotwired/turbo": "^8.0.23",
+    "hono": "^4.12.9",
     "jose": "^5.2.0",
     "miniflare": "^2.14.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.0",
+    "react-router-dom": "^6.30.3",
     "stripe": "^14.7.0",
-    "videojs": "^7.20.3",
-    "zod": "^3.22.4"
+    "video.js": "^8.23.7",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20.10.6",

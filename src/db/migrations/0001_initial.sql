@@ -1,0 +1,84 @@
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL UNIQUE,
+  display_name TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS videos (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  r2_key TEXT NOT NULL,
+  stream_video_id TEXT,
+  status TEXT NOT NULL DEFAULT 'uploaded',
+  view_count INTEGER NOT NULL DEFAULT 0,
+  deleted_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS comments (
+  id TEXT PRIMARY KEY,
+  video_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  parent_comment_id TEXT,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (video_id) REFERENCES videos(id),
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (parent_comment_id) REFERENCES comments(id)
+);
+
+CREATE TABLE IF NOT EXISTS views (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  video_id TEXT NOT NULL,
+  user_id TEXT,
+  viewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (video_id) REFERENCES videos(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY,
+  subscriber_user_id TEXT NOT NULL,
+  channel_user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (subscriber_user_id) REFERENCES users(id),
+  FOREIGN KEY (channel_user_id) REFERENCES users(id),
+  UNIQUE (subscriber_user_id, channel_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS playlists (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  is_public INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS playlist_videos (
+  playlist_id TEXT NOT NULL,
+  video_id TEXT NOT NULL,
+  position INTEGER NOT NULL DEFAULT 0,
+  added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (playlist_id, video_id),
+  FOREIGN KEY (playlist_id) REFERENCES playlists(id),
+  FOREIGN KEY (video_id) REFERENCES videos(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_videos_user_id ON videos(user_id);
+CREATE INDEX IF NOT EXISTS idx_videos_created_at ON videos(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_video_id ON comments(video_id);
+CREATE INDEX IF NOT EXISTS idx_views_video_id ON views(video_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_subscriber ON subscriptions(subscriber_user_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_channel ON subscriptions(channel_user_id);
+CREATE INDEX IF NOT EXISTS idx_playlist_videos_position ON playlist_videos(playlist_id, position);
