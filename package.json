@@ -1,0 +1,79 @@
+{
+  "name": "cloudflare-tube",
+  "version": "0.1.0",
+  "description": "A YouTube alternative built entirely on Cloudflare infrastructure",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "esbuild src/workers/index.ts --bundle --minify --platform=browser --outfile=dist/index.js",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write 'src/**/*.{ts,tsx,json}'",
+    "type-check": "tsc --noEmit",
+    "db:migrate": "wrangler d1 migrations apply cloudflare-tube-prod",
+    "db:migrate:staging": "wrangler d1 migrations apply cloudflare-tube-staging --env staging",
+    "db:seed": "node scripts/seed-db.js",
+    "cache:clear": "wrangler kv:key delete --namespace-id=$KV_NAMESPACE_ID '*' --path='/'",
+    "worker:tail": "wrangler tail",
+    "worker:logs": "wrangler tail --format json | jq .",
+    "analytics:view": "wrangler analytics-engine query"
+  },
+  "dependencies": {
+    "@cloudflare/workers-types": "^4.20240221.1",
+    "@hotwire/turbo": "^7.3.0",
+    "hono": "^3.11.7",
+    "jose": "^5.2.0",
+    "miniflare": "^2.14.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.0",
+    "stripe": "^14.7.0",
+    "videojs": "^7.20.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@typescript-eslint/eslint-plugin": "^6.17.0",
+    "@typescript-eslint/parser": "^6.17.0",
+    "@vitest/coverage-v8": "^1.1.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.7",
+    "vitest": "^1.1.0",
+    "wrangler": "^3.25.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "video",
+    "streaming",
+    "youtube",
+    "r2",
+    "stream",
+    "d1",
+    "edge-computing"
+  ],
+  "author": "aloe wright",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aloewright/cloudflare-tube.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aloewright/cloudflare-tube/issues"
+  },
+  "homepage": "https://github.com/aloewright/cloudflare-tube"
+}
