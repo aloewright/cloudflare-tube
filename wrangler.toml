@@ -1,0 +1,165 @@
+name = "cloudflare-tube"
+type = "javascript"
+account_id = "your_account_id"
+workers_dev = true
+route = "api.example.com/*"
+main = "src/workers/index.ts"
+compatibility_date = "2024-03-29"
+compatibility_flags = ["nodejs_compat"]
+
+# Environment configuration
+[env.production]
+name = "cloudflare-tube-production"
+route = "api.cloudflare-tube.com/*"
+vars = { ENVIRONMENT = "production" }
+
+[env.staging]
+name = "cloudflare-tube-staging"
+route = "staging-api.cloudflare-tube.com/*"
+vars = { ENVIRONMENT = "staging" }
+
+# R2 Buckets - Video Storage
+[[r2_buckets]]
+binding = "VIDEOS"
+bucket_name = "cloudflare-tube-videos"
+
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "cloudflare-tube-uploads"
+preview_bucket_name = "cloudflare-tube-uploads-preview"
+
+# D1 Database - Metadata, Users, Comments
+[[d1_databases]]
+binding = "DB"
+database_name = "cloudflare-tube-prod"
+database_id = "your_database_id_here"
+preview_database_id = "your_preview_database_id_here"
+
+# KV Namespace - Caching and Sessions
+[[kv_namespaces]]
+binding = "CACHE"
+id = "your_kv_namespace_id"
+preview_id = "your_kv_preview_namespace_id"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "your_sessions_kv_id"
+preview_id = "your_sessions_preview_kv_id"
+
+# Durable Objects - State Management
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+script_name = "cloudflare-tube"
+
+[[durable_objects.bindings]]
+name = "VIDEO_ENCODER"
+class_name = "VideoEncoder"
+script_name = "cloudflare-tube"
+
+[[durable_objects.bindings]]
+name = "ANALYTICS"
+class_name = "Analytics"
+script_name = "cloudflare-tube"
+
+# Queues - Async Processing
+[[queues.consumers]]
+queue = "video-encoding"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "video-encoding-dlq"
+
+[[queues.consumers]]
+queue = "thumbnail-generation"
+max_batch_size = 5
+max_batch_timeout = 60
+max_retries = 2
+
+# Scheduled Workers
+[triggers]
+crons = [
+  "0 */4 * * * ", # Batch video encoding every 4 hours
+  "0 0 * * 0 ",   # Weekly analytics rollup (Sunday midnight)
+  "0 * * * * "    # Hourly cache cleanup
+]
+
+# Analytics Engine
+[analytics]
+enabled = true
+binding = "ANALYTICS_ENGINE"
+
+# Build Configuration
+[build]
+cwd = "."
+command = "npm run build"
+watch_paths = ["src/**/*.ts", "src/**/*.tsx"]
+
+[build.upload]
+format = "modules"
+main = "./dist/index.js"
+
+# Environment Variables (set in Cloudflare Dashboard)
+[env.production.vars]
+CLOUDFLARE_ACCOUNT_ID = "your_account_id"
+CLOUDFLARE_ZONE_ID = "your_zone_id"
+API_HOST = "https://api.cloudflare-tube.com"
+FRONTEND_HOST = "https://cloudflare-tube.com"
+STREAM_ENABLED = true
+STREAM_WEBHOOK_SECRET = "your_webhook_secret"
+JWT_SECRET = "your_jwt_secret_here"
+MAX_VIDEO_SIZE = 5368709120 # 5GB
+THUMBNAIL_SIZE = 1280
+THUMBNAIL_QUALITY = 85
+HLS_SEGMENT_DURATION = 4
+VIDEO_RETENTION_DAYS = 90
+CACHE_TTL_HOURS = 1
+RATE_LIMIT_REQUESTS = 100
+RATE_LIMIT_WINDOW_SECONDS = 60
+MAX_CONCURRENT_UPLOADS = 5
+
+[env.staging.vars]
+CLOUDFLARE_ACCOUNT_ID = "your_account_id"
+CLOUDFLARE_ZONE_ID = "your_staging_zone_id"
+API_HOST = "https://staging-api.cloudflare-tube.com"
+FRONTEND_HOST = "https://staging.cloudflare-tube.com"
+STREAM_ENABLED = true
+STREAM_WEBHOOK_SECRET = "your_staging_webhook_secret"
+JWT_SECRET = "your_staging_jwt_secret_here"
+MAX_VIDEO_SIZE = 1073741824 # 1GB for staging
+THUMBNAIL_SIZE = 1280
+THUMBNAIL_QUALITY = 85
+HLS_SEGMENT_DURATION = 4
+VIDEO_RETENTION_DAYS = 7
+CACHE_TTL_HOURS = 0.5
+RATE_LIMIT_REQUESTS = 50
+RATE_LIMIT_WINDOW_SECONDS = 60
+MAX_CONCURRENT_UPLOADS = 3
+
+# Secrets (configure via wrangler secret put)
+# CF_API_TOKEN - Cloudflare API token with Stream permissions
+# CF_STREAM_API_TOKEN - Stream API specific token
+# STRIPE_SECRET_KEY - Stripe API key (for premium features)
+# STRIPE_WEBHOOK_SECRET - Stripe webhook secret
+# MAILGUN_API_KEY - Email service API key
+# SENTRY_DSN - Error tracking
+
+# Performance Optimization
+[limits]
+cpu_max_duration = 30000 # 30 seconds for encoding Workers
+
+# Observability
+[[env.production.tail_consumers]]
+service = "error-logger"
+environment = "production"
+
+# Service Bindings - Inter-Worker Communication
+[[services]]
+binding = "ENCODING_SERVICE"
+service = "cloudflare-tube-encoder"
+environment = "production"
+
+[[services]]
+binding = "ANALYTICS_SERVICE"
+service = "cloudflare-tube-analytics"
+environment = "production"
