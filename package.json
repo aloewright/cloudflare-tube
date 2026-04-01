@@ -29,7 +29,7 @@
     "@hotwired/turbo": "^8.0.23",
     "hono": "^4.12.9",
     "jose": "^5.2.0",
-    "miniflare": "^2.14.4",
+    "miniflare": "^4.20260329.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.30.3",
@@ -50,7 +50,7 @@
     "typescript": "^5.3.3",
     "vite": "^5.0.7",
     "vitest": "^1.1.0",
-    "wrangler": "^3.25.0"
+    "wrangler": "^4.79.0"
   },
   "engines": {
     "node": ">=18.0.0",
