@@ -8,6 +8,7 @@ const ALLOWED_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'vi
 async function uploadInChunks(file: File, title: string, description: string, onProgress: (value: number) => void): Promise<Response> {
   const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
   let lastResponse: Response | null = null;
+  let uploadId: string | null = null;
 
   for (let index = 0; index < chunkCount; index += 1) {
     const start = index * CHUNK_SIZE;
@@ -19,7 +20,9 @@ async function uploadInChunks(file: File, title: string, description: string, on
     formData.set('file', chunk, file.name);
     formData.set('chunkIndex', String(index));
     formData.set('chunkCount', String(chunkCount));
-    formData.set('originalSize', String(file.size));
+    if (uploadId) {
+      formData.set('uploadId', uploadId);
+    }
 
     lastResponse = await fetch('/api/videos/upload', {
       method: 'POST',
@@ -28,6 +31,11 @@ async function uploadInChunks(file: File, title: string, description: string, on
 
     if (!lastResponse.ok) {
       throw new Error('Upload failed');
+    }
+
+    const responseData = (await lastResponse.json()) as { uploadId?: string };
+    if (responseData.uploadId) {
+      uploadId = responseData.uploadId;
     }
 
     onProgress(Math.round(((index + 1) / chunkCount) * 100));

@@ -72,8 +72,9 @@ export async function handleEncodingMessage(env: Env, body: unknown): Promise<vo
     }
 
     await updateStatus(env, videoId, 'pending_encode');
-  } catch {
+  } catch (error) {
     await updateStatus(env, videoId, 'encode_failed');
-    throw new Error(`Encoding failed for video ${videoId}`);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Encoding failed for video ${videoId}: ${message}`);
   }
 }

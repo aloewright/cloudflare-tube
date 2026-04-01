@@ -206,11 +206,9 @@ app.post('/api/videos/upload', async (c) => {
     }, 201);
   }
 
-  if (!uploadId) {
-    return c.json({ error: 'uploadId is required for chunked uploads' }, 400);
-  }
+  const resolvedUploadId = uploadId ?? crypto.randomUUID();
 
-  const baseKvKey = `upload:${user.sub}:${uploadId}`;
+  const baseKvKey = `upload:${user.sub}:${resolvedUploadId}`;
   const mpidKey = `${baseKvKey}:mpid`;
   const metaKey = `${baseKvKey}:meta`;
   const partsKey = `${baseKvKey}:parts`;
@@ -237,6 +235,7 @@ app.post('/api/videos/upload', async (c) => {
       { expirationTtl: 86400 },
     );
     await env.SESSIONS.put(partsKey, JSON.stringify({}), { expirationTtl: 86400 });
+    return c.json({ status: 'chunk_received', chunkIndex, chunkCount, uploadId: resolvedUploadId }, 202);
   }
 
   const [multipartUploadId, uploadMetaJson, partsJson] = await Promise.all([
@@ -336,7 +335,10 @@ export default {
       try {
         await handleEncodingMessage(env, message.body);
         message.ack();
-      } catch {
+      } catch (error) {
+        console.error('video-encoding queue message failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         message.retry();
       }
     }
