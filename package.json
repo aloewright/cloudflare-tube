@@ -27,7 +27,7 @@
     "@cloudflare/kumo": "^1.16.0",
     "@cloudflare/workers-types": "^4.20240221.1",
     "@hotwired/turbo": "^8.0.23",
-    "hono": "^4.12.9",
+    "hono": "^4.12.12",
     "jose": "^5.2.0",
     "miniflare": "^2.14.4",
     "react": "^18.2.0",
