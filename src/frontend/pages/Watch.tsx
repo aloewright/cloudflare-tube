@@ -1,4 +1,3 @@
-import { Badge, Button, Surface } from '@cloudflare/kumo';
 import videojs from 'video.js';
 import type Player from 'video.js/dist/types/player';
 import 'video.js/dist/video-js.css';
@@ -63,25 +62,49 @@ export function Watch(): JSX.Element {
   }, [playbackUrl]);
 
   if (error) {
-    return <Surface className="p-4">{error}</Surface>;
+    return (
+      <main className="app-main stack">
+        <p className="status-error">{error}</p>
+      </main>
+    );
   }
 
   if (!video) {
-    return <Surface className="p-4">Loading…</Surface>;
+    return (
+      <main className="app-main stack">
+        <p className="ds-meta">Loading…</p>
+      </main>
+    );
   }
 
   return (
-    <Surface className="p-4 space-y-3">
-      <div>
+    <main className="app-main stack-lg fade-in">
+      <div
+        className="card--tight"
+        style={{
+          padding: 0,
+          overflow: 'hidden',
+          borderRadius: 'var(--radius-2xl)',
+          border: '1px solid color-mix(in oklch, var(--border), transparent 30%)',
+          background: 'oklch(0 0 0)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
         <video ref={videoEl} className="video-js vjs-big-play-centered" />
       </div>
-      <h1>{video.title}</h1>
-      <div className="flex gap-2">
-        <Badge>{video.view_count} views</Badge>
-        <Badge>{video.channel_name ?? 'Unknown Channel'}</Badge>
+      <div className="stack-sm">
+        <h1 className="ds-h2">{video.title}</h1>
+        <div className="row">
+          <span className="badge">{video.view_count} views</span>
+          <span className="badge">{video.channel_name ?? 'Unknown channel'}</span>
+        </div>
       </div>
       <p>{video.description}</p>
-      <Button>Subscribe</Button>
-    </Surface>
+      <div>
+        <button type="button" className="btn">
+          Subscribe
+        </button>
+      </div>
+    </main>
   );
 }

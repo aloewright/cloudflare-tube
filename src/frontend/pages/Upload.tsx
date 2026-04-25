@@ -1,11 +1,15 @@
-import { Button, Field, Input, Meter, Surface } from '@cloudflare/kumo';
 import { FormEvent, useMemo, useState } from 'react';
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const MAX_SIZE = 5 * 1024 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska']);
 
-async function uploadInChunks(file: File, title: string, description: string, onProgress: (value: number) => void): Promise<Response> {
+async function uploadInChunks(
+  file: File,
+  title: string,
+  description: string,
+  onProgress: (value: number) => void,
+): Promise<Response> {
   const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
   let lastResponse: Response | null = null;
   let uploadId: string | null = null;
@@ -89,33 +93,81 @@ export function Upload(): JSX.Element {
   }
 
   return (
-    <Surface className="p-4 space-y-3">
-      <h1>Upload Video</h1>
-      <form onSubmit={(event) => void onSubmit(event)} className="space-y-3">
-        <Field label="Title">
-          <Input value={title} onChange={(event) => setTitle(event.target.value)} required />
-        </Field>
-        <Field label="Description">
-          <Input value={description} onChange={(event) => setDescription(event.target.value)} />
-        </Field>
-        <Field label="Video File">
-          <Input
+    <main className="app-main app-main--narrow stack-lg fade-in">
+      <div className="stack-sm">
+        <span className="ds-label">Upload</span>
+        <h1 className="ds-h2">Add a video</h1>
+      </div>
+
+      <form
+        onSubmit={(event) => void onSubmit(event)}
+        className="card stack"
+      >
+        <div className="field">
+          <label className="field__label" htmlFor="upload-title">
+            Title
+          </label>
+          <input
+            id="upload-title"
+            className="input"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            required
+          />
+        </div>
+
+        <div className="field">
+          <label className="field__label" htmlFor="upload-description">
+            Description
+          </label>
+          <textarea
+            id="upload-description"
+            className="input"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </div>
+
+        <div className="field">
+          <label className="field__label" htmlFor="upload-file">
+            Video file
+          </label>
+          <input
+            id="upload-file"
             type="file"
+            className="input"
             accept="video/*"
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             required
           />
-        </Field>
+          <span className="ds-meta">MP4, WebM, MOV, or MKV. 5GB max.</span>
+        </div>
 
-        <Meter label="Upload progress" value={progress} max={100} />
-        <div>{progress}%</div>
+        <div className="stack-sm">
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <span className="ds-label">Upload progress</span>
+            <span className="ds-meta">{progress}%</span>
+          </div>
+          <div
+            className="meter"
+            role="progressbar"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div className="meter__bar" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
 
-        <Button type="submit" disabled={!isValidFile}>
-          Upload
-        </Button>
+        <div>
+          <button type="submit" className="btn" disabled={!isValidFile}>
+            Upload
+          </button>
+        </div>
       </form>
-      {error ? <p>{error}</p> : null}
-      {status ? <p>{status}</p> : null}
-    </Surface>
+
+      {error ? <p className="status-error">{error}</p> : null}
+      {status ? <p className="status-ok">{status}</p> : null}
+    </main>
   );
 }
