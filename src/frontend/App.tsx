@@ -5,8 +5,8 @@ import './styles/strand.css';
 
 function Wordmark({ size = 'lg' }: { size?: 'lg' | 'sm' }): JSX.Element {
   return (
-    <Link to="/" aria-label="Cloudflare Tube" className={size === 'sm' ? 'ds-wordmark ds-wordmark--sm' : 'ds-wordmark'}>
-      Cloudflare Tube
+    <Link to="/" aria-label="spooool" className={size === 'sm' ? 'ds-wordmark ds-wordmark--sm' : 'ds-wordmark'}>
+      spooool
     </Link>
   );
 }
@@ -39,7 +39,7 @@ function Home(): JSX.Element {
       <section className="stack-sm" style={{ alignItems: 'center', textAlign: 'center', paddingTop: 'var(--space-8)' }}>
         <Wordmark />
         <p className="ds-meta" style={{ maxWidth: 420 }}>
-          A video host built on Cloudflare. Upload, stream, share — no friction.
+          A video host that respects your time. Upload, stream, share — no friction.
         </p>
       </section>
 
