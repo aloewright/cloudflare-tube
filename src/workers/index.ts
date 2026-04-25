@@ -16,7 +16,21 @@ type EnvBindings = Record<string, unknown> & {
   SESSIONS: KVNamespace;
   RATE_LIMITER: DurableObjectNamespace;
   VIDEO_ENCODING: Queue;
+  REQUIRE_AUTH?: string;
 };
+
+const ANONYMOUS_USER: User = {
+  sub: 'anonymous',
+  email: 'anonymous@local',
+  name: 'Anonymous',
+};
+
+function resolveUploader(env: EnvBindings, user: User | null): User | null {
+  if (user) {
+    return user;
+  }
+  return env.REQUIRE_AUTH === 'true' ? null : ANONYMOUS_USER;
+}
 
 type Variables = {
   user: User | null;
@@ -130,7 +144,7 @@ app.get('/api/videos/:id', async (c) => {
 
 app.post('/api/videos/upload', async (c) => {
   const env = c.env as EnvBindings;
-  const user = c.get('user');
+  const user = resolveUploader(env, c.get('user'));
   if (!user) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
@@ -222,6 +236,8 @@ app.post('/api/videos/upload', async (c) => {
       },
     });
 
+    const firstPart = await multipart.uploadPart(1, rawFile.stream());
+
     await env.SESSIONS.put(mpidKey, multipart.uploadId, { expirationTtl: 86400 });
     await env.SESSIONS.put(
       metaKey,
@@ -234,7 +250,11 @@ app.post('/api/videos/upload', async (c) => {
       }),
       { expirationTtl: 86400 },
     );
-    await env.SESSIONS.put(partsKey, JSON.stringify({}), { expirationTtl: 86400 });
+    await env.SESSIONS.put(
+      partsKey,
+      JSON.stringify({ '1': firstPart.etag } as Record<string, string>),
+      { expirationTtl: 86400 },
+    );
     return c.json({ status: 'chunk_received', chunkIndex, chunkCount, uploadId: resolvedUploadId }, 202);
   }
 
