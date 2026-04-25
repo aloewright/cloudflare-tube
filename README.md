@@ -1,6 +1,8 @@
-# Cloudflare Tube 🎥
+# spooool
 
-A complete YouTube alternative built **entirely on Cloudflare infrastructure**. Zero external dependencies for core functionality.
+A video host that respects your time. Built **entirely on Cloudflare infrastructure** — zero external dependencies for core functionality.
+
+> **Note on infra naming.** The product was rebranded from "Cloudflare Tube" to **spooool**. The underlying R2 bucket (`cloudflare-tube-videos`) and D1 database (`cloudflare-tube-prod`) still use the legacy names; rename in Cloudflare and update `wrangler.toml` if you want them aligned.
 
 ## Architecture Overview
 
@@ -85,8 +87,8 @@ For cost-conscious deployment:
 
 ```bash
 # Clone and install
-git clone https://github.com/aloewright/cloudflare-tube.git
-cd cloudflare-tube
+git clone https://github.com/aloewright/spooool.git
+cd spooool
 npm install
 
 # Configure Wrangler
@@ -117,7 +119,7 @@ DATABASE_URL=postgresql://...  # Only if using external DB
 ## Project Structure
 
 ```
-cloudflare-tube/
+spooool/
 ├── src/
 │   ├── api/               # Workers endpoints
 │   │   ├── videos.ts      # Video CRUD operations
@@ -146,14 +148,14 @@ cloudflare-tube/
 ### wrangler.toml
 
 ```toml
-name = "cloudflare-tube"
+name = "spooool"
 type = "javascript"
 account_id = "your_account_id"
 workers_dev = true
-route = "api.cloudflare-tube.com/*"
+route = "api.spooool.com/*"
 
 [env.production]
-route = "api.cloudflare-tube.com/*"
+route = "api.spooool.com/*"
 
 [[r2_buckets]]
 binding = "VIDEOS"
@@ -171,11 +173,11 @@ id = "your_kv_namespace_id"
 [[durable_objects.bindings]]
 name = "RATE_LIMITER"
 class_name = "RateLimiter"
-script_name = "cloudflare-tube"
+script_name = "spooool"
 
 [env.production.env]
 ENVIRONMENT = "production"
-API_HOST = "https://api.cloudflare-tube.com"
+API_HOST = "https://api.spooool.com"
 ```
 
 ## Deployment
@@ -190,10 +192,10 @@ wrangler dev
 wrangler deploy --env production
 
 # Create Pages project
-wrangler pages project create cloudflare-tube-web
+wrangler pages project create spooool-web
 
 # Deploy frontend
-wrangler pages deploy ./dist --project-name cloudflare-tube-web
+wrangler pages deploy ./dist --project-name spooool-web
 ```
 
 ### Using Stream for Encoding
@@ -207,7 +209,7 @@ wrangler pages deploy ./dist --project-name cloudflare-tube-web
 
 ```bash
 # Deploy encoding Worker separately
-wrangler deploy --name cloudflare-tube-encoder
+wrangler deploy --name spooool-encoder
 
 # Or use scheduled Worker for batch encoding
 # Configure in wrangler.toml:
@@ -374,9 +376,9 @@ MIT - Build your own video platform!
 
 ## Support
 
-- Issues: [GitHub Issues](https://github.com/aloewright/cloudflare-tube/issues)
-- Discussions: [GitHub Discussions](https://github.com/aloewright/cloudflare-tube/discussions)
-- Email: support@cloudflare-tube.com
+- Issues: [GitHub Issues](https://github.com/aloewright/spooool/issues)
+- Discussions: [GitHub Discussions](https://github.com/aloewright/spooool/discussions)
+- Email: support@spooool.com
 
 ---
 

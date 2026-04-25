@@ -1,7 +1,7 @@
 {
-  "name": "cloudflare-tube",
+  "name": "spooool",
   "version": "0.1.0",
-  "description": "A YouTube alternative built entirely on Cloudflare infrastructure",
+  "description": "A video host that respects your time. Built on Cloudflare.",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -74,10 +74,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aloewright/cloudflare-tube.git"
+    "url": "https://github.com/aloewright/spooool.git"
   },
   "bugs": {
-    "url": "https://github.com/aloewright/cloudflare-tube/issues"
+    "url": "https://github.com/aloewright/spooool/issues"
   },
-  "homepage": "https://github.com/aloewright/cloudflare-tube"
+  "homepage": "https://github.com/aloewright/spooool"
 }
