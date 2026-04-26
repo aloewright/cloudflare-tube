@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Watch } from './pages/Watch';
 import { Upload } from './pages/Upload';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { Profile } from './pages/Profile';
 import { Channel } from './pages/Channel';
+import { Search } from './pages/Search';
 import { signOut, useSession } from './lib/auth-client';
 import './styles/strand.css';
 
@@ -69,10 +70,45 @@ function HeaderNav(): JSX.Element {
   );
 }
 
+function HeaderSearch(): JSX.Element {
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const initial = params.get('q') ?? '';
+  const [value, setValue] = useState(initial);
+
+  useEffect(() => {
+    setValue(initial);
+  }, [initial]);
+
+  return (
+    <form
+      role="search"
+      className="app-header__search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const q = value.trim();
+        if (q.length === 0) return;
+        navigate(`/search?q=${encodeURIComponent(q)}`);
+      }}
+    >
+      <input
+        type="search"
+        name="q"
+        aria-label="Search videos"
+        placeholder="Search videos…"
+        className="input input--sm"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+    </form>
+  );
+}
+
 function AppHeader(): JSX.Element {
   return (
     <header className="app-header">
       <Wordmark size="sm" />
+      <HeaderSearch />
       <HeaderNav />
     </header>
   );
@@ -226,6 +262,7 @@ export default function App(): JSX.Element {
           }
         />
         <Route path="/channel/:username" element={<Channel />} />
+        <Route path="/search" element={<Search />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
