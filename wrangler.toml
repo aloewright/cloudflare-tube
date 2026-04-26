@@ -49,6 +49,15 @@ dead_letter_queue = "video-encoding-dlq"
 binding = "ANALYTICS"
 dataset = "spooool_video_analytics"
 
+# Durable Object — channel subscriber fan-out (ALO-156)
+[[durable_objects.bindings]]
+name = "CHANNEL_SUBSCRIBER_DO"
+class_name = "ChannelSubscriberDO"
+
+[[migrations]]
+tag = "do_v1"
+new_classes = ["ChannelSubscriberDO"]
+
 [vars]
 # Comma-separated origin allow-list for CSRF protection on /api/*. Same-origin
 # is always allowed in addition to whatever is listed here. Override per env.

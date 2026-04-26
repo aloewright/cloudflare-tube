@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSession } from '../lib/auth-client';
 
@@ -34,6 +34,9 @@ export function Channel(): JSX.Element {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sub, setSub] = useState<{ subscribed: boolean; subscriberCount: number } | null>(null);
+  const [subBusy, setSubBusy] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!username) return;
@@ -85,6 +88,52 @@ export function Channel(): JSX.Element {
       cancelled = true;
     };
   }, [username, page, error]);
+
+  useEffect(() => {
+    if (!username) return;
+    let cancelled = false;
+    void fetch(
+      `/api/channels/${encodeURIComponent(username)}/subscription`,
+      { credentials: 'same-origin' },
+    )
+      .then(async (r) => {
+        if (!r.ok) throw new Error('Failed to load subscription');
+        return (await r.json()) as { subscribed: boolean; subscriberCount: number };
+      })
+      .then((data) => {
+        if (!cancelled) setSub(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [username]);
+
+  const toggleSubscribe = useCallback(async (): Promise<void> => {
+    if (!username || subBusy) return;
+    if (!session) {
+      setSubError('Sign in to subscribe.');
+      return;
+    }
+    const wasSubscribed = sub?.subscribed ?? false;
+    setSubBusy(true);
+    setSubError(null);
+    try {
+      const r = await fetch(
+        `/api/channels/${encodeURIComponent(username)}/subscribe`,
+        { method: wasSubscribed ? 'DELETE' : 'POST', credentials: 'same-origin' },
+      );
+      if (!r.ok) throw new Error('Failed to update subscription');
+      setSub((s) => ({
+        subscribed: !wasSubscribed,
+        subscriberCount: Math.max(0, (s?.subscriberCount ?? 0) + (wasSubscribed ? -1 : 1)),
+      }));
+    } catch (err: unknown) {
+      setSubError(err instanceof Error ? err.message : 'Failed to update subscription');
+    } finally {
+      setSubBusy(false);
+    }
+  }, [username, session, sub?.subscribed, subBusy]);
 
   if (loading && !header) {
     return (
@@ -155,7 +204,7 @@ export function Channel(): JSX.Element {
             <span className="ds-meta">@{header.username}</span>
           ) : null}
           <span className="ds-meta">
-            {header.subscriberCount} subscribers · {header.videoCount} videos
+            {sub?.subscriberCount ?? header.subscriberCount} subscribers · {header.videoCount} videos
           </span>
         </div>
         {isOwner ? (
@@ -164,9 +213,22 @@ export function Channel(): JSX.Element {
               Edit channel
             </button>
           </Link>
-        ) : null}
+        ) : (
+          <button
+            type="button"
+            className={sub?.subscribed ? 'btn btn--secondary btn--sm' : 'btn btn--sm'}
+            onClick={() => {
+              void toggleSubscribe();
+            }}
+            disabled={subBusy}
+            aria-pressed={sub?.subscribed ?? false}
+          >
+            {sub?.subscribed ? 'Subscribed' : 'Subscribe'}
+          </button>
+        )}
       </header>
 
+      {subError ? <p className="status-error">{subError}</p> : null}
       {header.bio ? <p style={{ maxWidth: 720 }}>{header.bio}</p> : null}
 
       <section className="stack-sm" aria-label="Videos">

@@ -6,6 +6,7 @@ import {
   ensureSessionId,
   shouldCountView,
 } from './analytics';
+import { ChannelSubscriberDO, triggerFanOut } from './channel-do';
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
 import { channelRoutes } from './channels';
@@ -15,6 +16,7 @@ import { likeRoutes } from './likes';
 import { securityHeaders } from './security-headers';
 import { searchRoutes } from './search';
 import { handleStreamWebhook } from './stream-webhook';
+import { subscriptionRoutes } from './subscriptions';
 import { thumbnailRoutes } from './thumbnails';
 import { userRoutes } from './users';
 import {
@@ -39,6 +41,7 @@ type EnvBindings = AuthEnv & {
   CACHE: KVNamespace;
   SESSIONS: KVNamespace;
   RATE_LIMITER: DurableObjectNamespace;
+  CHANNEL_SUBSCRIBER_DO?: DurableObjectNamespace;
   VIDEO_ENCODING: Queue;
   ANALYTICS?: AnalyticsEngineDataset;
   CF_STREAM_WEBHOOK_SECRET?: string;
@@ -99,6 +102,7 @@ app.route('/', searchRoutes);
 app.route('/', likeRoutes);
 app.route('/', commentRoutes);
 app.route('/', analyticsRoutes);
+app.route('/', subscriptionRoutes);
 
 app.get('/api/videos/trending', async (c) => {
   const parsed = trendingQuerySchema.safeParse(c.req.query());
@@ -162,7 +166,9 @@ app.get('/api/videos', async (c) => {
 app.get('/api/videos/:id', async (c) => {
   const id = c.req.param('id');
   const video = await c.env.DB.prepare(
-    `SELECT v.id, v.user_id, v.title, v.description, v.r2_key, v.stream_video_id, v.status, v.view_count, v.created_at, v.updated_at, u.name AS channel_name
+    `SELECT v.id, v.user_id, v.title, v.description, v.r2_key, v.stream_video_id, v.status,
+            v.view_count, v.created_at, v.updated_at,
+            u.name AS channel_name, u.username AS channel_username
      FROM videos v
      LEFT JOIN user u ON u.id = v.user_id
      WHERE v.id = ? AND v.deleted_at IS NULL`,
@@ -285,6 +291,10 @@ app.post('/api/videos/upload', async (c) => {
       .run();
 
     await env.VIDEO_ENCODING.send({ videoId, r2Key });
+    await triggerFanOut(env.CHANNEL_SUBSCRIBER_DO, {
+      videoId,
+      channelUserId: user.id,
+    });
 
     return c.json({ id: videoId, status: 'uploaded' }, 201);
   }
@@ -388,6 +398,10 @@ app.post('/api/videos/upload', async (c) => {
     .run();
 
   await env.VIDEO_ENCODING.send({ videoId: uploadMeta.videoId, r2Key: uploadMeta.r2Key });
+  await triggerFanOut(env.CHANNEL_SUBSCRIBER_DO, {
+    videoId: uploadMeta.videoId,
+    channelUserId: user.id,
+  });
 
   await Promise.all([env.SESSIONS.delete(mpidKey), env.SESSIONS.delete(metaKey), env.SESSIONS.delete(partsKey)]);
 
@@ -421,6 +435,8 @@ app.delete('/api/videos/:id', async (c) => {
 
   return c.json({ success: true });
 });
+
+export { ChannelSubscriberDO };
 
 export default {
   fetch: app.fetch,

@@ -13,6 +13,7 @@ type VideoResponse = {
   description: string;
   view_count: number;
   channel_name?: string;
+  channel_username?: string | null;
   stream_video_id?: string;
 };
 
@@ -24,6 +25,9 @@ export function Watch(): JSX.Element {
   const [likes, setLikes] = useState<{ count: number; liked: boolean } | null>(null);
   const [likeBusy, setLikeBusy] = useState(false);
   const [likeError, setLikeError] = useState<string | null>(null);
+  const [sub, setSub] = useState<{ subscribed: boolean; subscriberCount: number } | null>(null);
+  const [subBusy, setSubBusy] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
   const videoEl = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<Player | null>(null);
 
@@ -66,6 +70,54 @@ export function Watch(): JSX.Element {
       cancelled = true;
     };
   }, [id]);
+
+  const channelUsername = video?.channel_username ?? null;
+
+  useEffect(() => {
+    if (!channelUsername) return;
+    let cancelled = false;
+    void fetch(
+      `/api/channels/${encodeURIComponent(channelUsername)}/subscription`,
+      { credentials: 'same-origin' },
+    )
+      .then(async (r) => {
+        if (!r.ok) throw new Error('Failed to load subscription');
+        return (await r.json()) as { subscribed: boolean; subscriberCount: number };
+      })
+      .then((data) => {
+        if (!cancelled) setSub(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [channelUsername]);
+
+  const toggleSubscribe = useCallback(async (): Promise<void> => {
+    if (!channelUsername || subBusy) return;
+    if (!session) {
+      setSubError('Sign in to subscribe.');
+      return;
+    }
+    const wasSubscribed = sub?.subscribed ?? false;
+    setSubBusy(true);
+    setSubError(null);
+    try {
+      const r = await fetch(
+        `/api/channels/${encodeURIComponent(channelUsername)}/subscribe`,
+        { method: wasSubscribed ? 'DELETE' : 'POST', credentials: 'same-origin' },
+      );
+      if (!r.ok) throw new Error('Failed to update subscription');
+      setSub((s) => ({
+        subscribed: !wasSubscribed,
+        subscriberCount: Math.max(0, (s?.subscriberCount ?? 0) + (wasSubscribed ? -1 : 1)),
+      }));
+    } catch (err: unknown) {
+      setSubError(err instanceof Error ? err.message : 'Failed to update subscription');
+    } finally {
+      setSubBusy(false);
+    }
+  }, [channelUsername, session, sub?.subscribed, subBusy]);
 
   const toggleLike = useCallback(async (): Promise<void> => {
     if (!id || likeBusy) return;
@@ -198,11 +250,21 @@ export function Watch(): JSX.Element {
           {likes?.liked ? '♥ Liked' : '♡ Like'}
           {likes ? ` · ${likes.count}` : ''}
         </button>
-        <button type="button" className="btn btn--ghost">
-          Subscribe
+        <button
+          type="button"
+          className={sub?.subscribed ? 'btn btn--secondary' : 'btn'}
+          onClick={() => {
+            void toggleSubscribe();
+          }}
+          disabled={subBusy || !channelUsername}
+          aria-pressed={sub?.subscribed ?? false}
+        >
+          {sub?.subscribed ? 'Subscribed' : 'Subscribe'}
+          {sub ? ` · ${sub.subscriberCount}` : ''}
         </button>
       </div>
       {likeError ? <p className="status-error">{likeError}</p> : null}
+      {subError ? <p className="status-error">{subError}</p> : null}
       {id ? <Comments videoId={id} /> : null}
     </main>
   );
