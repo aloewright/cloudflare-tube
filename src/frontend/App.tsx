@@ -5,6 +5,7 @@ import { Upload } from './pages/Upload';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { Profile } from './pages/Profile';
+import { Channel } from './pages/Channel';
 import { signOut, useSession } from './lib/auth-client';
 import './styles/strand.css';
 
@@ -176,15 +177,6 @@ function Home(): JSX.Element {
           ))}
         </div>
       </section>
-    </main>
-  );
-}
-
-function Channel(): JSX.Element {
-  return (
-    <main className="app-main stack fade-in">
-      <h1 className="ds-h2">Channel</h1>
-      <p className="ds-meta">No videos yet.</p>
     </main>
   );
 }
