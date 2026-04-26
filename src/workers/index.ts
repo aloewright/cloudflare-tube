@@ -10,6 +10,7 @@ import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
 import { channelRoutes } from './channels';
 import { csrfProtection, parseAllowedOrigins } from './csrf';
+import { likeRoutes } from './likes';
 import { securityHeaders } from './security-headers';
 import { searchRoutes } from './search';
 import { handleStreamWebhook } from './stream-webhook';
@@ -94,6 +95,7 @@ app.route('/', thumbnailRoutes);
 app.route('/', userRoutes);
 app.route('/', channelRoutes);
 app.route('/', searchRoutes);
+app.route('/', likeRoutes);
 app.route('/', analyticsRoutes);
 
 app.get('/api/videos/trending', async (c) => {
