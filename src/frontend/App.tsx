@@ -4,6 +4,7 @@ import { Watch } from './pages/Watch';
 import { Upload } from './pages/Upload';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
+import { Profile } from './pages/Profile';
 import { signOut, useSession } from './lib/auth-client';
 import './styles/strand.css';
 
@@ -50,6 +51,9 @@ function HeaderNav(): JSX.Element {
       <span className="ds-meta">{session.user.email}</span>
       <Link to="/upload">
         <button type="button" className="btn btn--secondary btn--sm">Upload</button>
+      </Link>
+      <Link to="/profile">
+        <button type="button" className="btn btn--ghost btn--sm">Profile</button>
       </Link>
       <button
         type="button"
@@ -218,6 +222,14 @@ export default function App(): JSX.Element {
           element={
             <RequireAuth>
               <Upload />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <RequireAuth>
+              <Profile />
             </RequireAuth>
           }
         />
