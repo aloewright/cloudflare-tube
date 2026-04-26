@@ -6,6 +6,7 @@ import { createAuth, type AuthEnv } from '../auth';
 import { csrfProtection, parseAllowedOrigins } from './csrf';
 import { securityHeaders } from './security-headers';
 import { handleStreamWebhook } from './stream-webhook';
+import { thumbnailRoutes } from './thumbnails';
 import {
   MAX_VIDEO_BYTES,
   validateChunkShape,
@@ -75,6 +76,8 @@ app.use('/api/*', async (c, next) => {
   c.set('user', session ? (session.user as SessionUser) : null);
   await next();
 });
+
+app.route('/', thumbnailRoutes);
 
 app.get('/api/videos/trending', async (c) => {
   const parsed = trendingQuerySchema.safeParse(c.req.query());

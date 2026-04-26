@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Context, MiddlewareHandler } from 'hono';
+import { buildThumbnailCandidates } from './thumbnails';
 
 export const STREAM_WEBHOOK_TOLERANCE_SECONDS = 60 * 5;
 
@@ -18,6 +19,7 @@ const streamWebhookSchema = z.object({
     .partial()
     .optional(),
   thumbnail: z.string().url().optional(),
+  duration: z.number().nonnegative().optional(),
 });
 
 export type StreamWebhookPayload = z.infer<typeof streamWebhookSchema>;
@@ -150,6 +152,10 @@ export const handleStreamWebhook =
     const status = mapStreamState(payload.status.state);
     const playbackHls = payload.playback?.hls ?? null;
     const thumbnail = payload.thumbnail ?? null;
+    const candidatesJson =
+      status === 'ready'
+        ? JSON.stringify(buildThumbnailCandidates(payload.uid, payload.duration))
+        : null;
 
     const result = await c.env.DB.prepare(
       `UPDATE videos
@@ -157,10 +163,11 @@ export const handleStreamWebhook =
            stream_video_id = ?,
            playback_hls_url = COALESCE(?, playback_hls_url),
            thumbnail_url = COALESCE(?, thumbnail_url),
+           thumbnail_candidates = COALESCE(?, thumbnail_candidates),
            updated_at = CURRENT_TIMESTAMP
        WHERE stream_video_id = ?`,
     )
-      .bind(status, payload.uid, playbackHls, thumbnail, payload.uid)
+      .bind(status, payload.uid, playbackHls, thumbnail, candidatesJson, payload.uid)
       .run();
 
     const changes = (result.meta?.changes as number | undefined) ?? 0;
