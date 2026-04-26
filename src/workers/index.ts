@@ -11,6 +11,7 @@ import { createAuth, type AuthEnv } from '../auth';
 import { channelRoutes } from './channels';
 import { csrfProtection, parseAllowedOrigins } from './csrf';
 import { securityHeaders } from './security-headers';
+import { searchRoutes } from './search';
 import { handleStreamWebhook } from './stream-webhook';
 import { thumbnailRoutes } from './thumbnails';
 import { userRoutes } from './users';
@@ -92,6 +93,7 @@ app.use('/api/*', async (c, next) => {
 app.route('/', thumbnailRoutes);
 app.route('/', userRoutes);
 app.route('/', channelRoutes);
+app.route('/', searchRoutes);
 app.route('/', analyticsRoutes);
 
 app.get('/api/videos/trending', async (c) => {
