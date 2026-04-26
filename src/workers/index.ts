@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
+import { securityHeaders } from './security-headers';
 import {
   MAX_VIDEO_BYTES,
   validateChunkShape,
@@ -46,6 +47,7 @@ const uploadMetadataSchema = z.object({
 
 const app = new Hono<{ Bindings: EnvBindings; Variables: Variables }>();
 
+app.use('*', securityHeaders());
 app.use('*', cors({ origin: (origin) => origin, credentials: true }));
 
 app.all('/api/auth/*', async (c) => {
