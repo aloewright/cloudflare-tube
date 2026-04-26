@@ -44,6 +44,11 @@ max_batch_timeout = 30
 max_retries = 3
 dead_letter_queue = "video-encoding-dlq"
 
+[vars]
+# Comma-separated origin allow-list for CSRF protection on /api/*. Same-origin
+# is always allowed in addition to whatever is listed here. Override per env.
+ALLOWED_ORIGINS = ""
+
 # Secrets (set via: wrangler secret put <NAME>)
 # BETTER_AUTH_SECRET      (required — random 32+ byte string for signing sessions)
 # BETTER_AUTH_URL         (optional — public origin, e.g. https://spooool.workers.dev)

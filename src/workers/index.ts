@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
+import { csrfProtection, parseAllowedOrigins } from './csrf';
 import { securityHeaders } from './security-headers';
 import { handleStreamWebhook } from './stream-webhook';
 import {
@@ -25,6 +26,7 @@ type EnvBindings = AuthEnv & {
   RATE_LIMITER: DurableObjectNamespace;
   VIDEO_ENCODING: Queue;
   CF_STREAM_WEBHOOK_SECRET?: string;
+  ALLOWED_ORIGINS?: string;
 };
 
 type Variables = {
@@ -51,6 +53,14 @@ const app = new Hono<{ Bindings: EnvBindings; Variables: Variables }>();
 
 app.use('*', securityHeaders());
 app.use('*', cors({ origin: (origin) => origin, credentials: true }));
+
+app.use('/api/*', async (c, next) => {
+  const allowedOrigins = parseAllowedOrigins(c.env.ALLOWED_ORIGINS);
+  return csrfProtection({
+    allowedOrigins,
+    exemptPaths: ['/api/webhooks/*'],
+  })(c, next);
+});
 
 app.post('/api/webhooks/stream', handleStreamWebhook());
 
