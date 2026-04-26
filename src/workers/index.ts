@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
 import { securityHeaders } from './security-headers';
+import { handleStreamWebhook } from './stream-webhook';
 import {
   MAX_VIDEO_BYTES,
   validateChunkShape,
@@ -23,6 +24,7 @@ type EnvBindings = AuthEnv & {
   SESSIONS: KVNamespace;
   RATE_LIMITER: DurableObjectNamespace;
   VIDEO_ENCODING: Queue;
+  CF_STREAM_WEBHOOK_SECRET?: string;
 };
 
 type Variables = {
@@ -49,6 +51,8 @@ const app = new Hono<{ Bindings: EnvBindings; Variables: Variables }>();
 
 app.use('*', securityHeaders());
 app.use('*', cors({ origin: (origin) => origin, credentials: true }));
+
+app.post('/api/webhooks/stream', handleStreamWebhook());
 
 app.all('/api/auth/*', async (c) => {
   const auth = createAuth(c.env);
