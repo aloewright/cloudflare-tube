@@ -3,6 +3,11 @@ import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
+import {
+  MAX_VIDEO_BYTES,
+  validateChunkShape,
+  validateInitialFile,
+} from './upload-validation';
 
 type SessionUser = {
   id: string;
@@ -143,6 +148,26 @@ app.post('/api/videos/upload', async (c) => {
 
   const { uploadId, chunkIndex, chunkCount } = chunkParsed.data;
 
+  const chunkError = validateChunkShape({
+    chunkSize: rawFile.size,
+    chunkIndex,
+    chunkCount,
+  });
+  if (chunkError) {
+    return c.json({ error: chunkError.message, code: chunkError.code }, 400);
+  }
+
+  if (chunkIndex === 0) {
+    const initialError = validateInitialFile({
+      fileName: rawFile.name,
+      mimeType: rawFile.type,
+      totalSize: chunkCount === 1 ? rawFile.size : undefined,
+    });
+    if (initialError) {
+      return c.json({ error: initialError.message, code: initialError.code }, 400);
+    }
+  }
+
   if (chunkCount === 1) {
     const videoId = crypto.randomUUID();
     const r2Key = `${user.id}/${videoId}/${rawFile.name}`;
@@ -193,7 +218,10 @@ app.post('/api/videos/upload', async (c) => {
     );
     await env.SESSIONS.put(
       partsKey,
-      JSON.stringify({ '1': firstPart.etag } as Record<string, string>),
+      JSON.stringify({ '1': { etag: firstPart.etag, size: rawFile.size } } as Record<
+        string,
+        { etag: string; size: number }
+      >),
       { expirationTtl: 86400 },
     );
     return c.json({ status: 'chunk_received', chunkIndex, chunkCount, uploadId: resolvedUploadId }, 202);
@@ -219,11 +247,22 @@ app.post('/api/videos/upload', async (c) => {
     })
     .parse(JSON.parse(uploadMetaJson));
 
+  const uploadedPartsMap = partsJson
+    ? (JSON.parse(partsJson) as Record<string, { etag: string; size: number }>)
+    : {};
+
+  const priorBytes = Object.values(uploadedPartsMap).reduce((sum, part) => sum + part.size, 0);
+  if (priorBytes + rawFile.size > MAX_VIDEO_BYTES) {
+    return c.json(
+      { error: `Upload exceeds ${MAX_VIDEO_BYTES} bytes`, code: 'file_too_large' },
+      400,
+    );
+  }
+
   const multipart = env.VIDEOS.resumeMultipartUpload(uploadMeta.r2Key, multipartUploadId);
   const uploadedPart = await multipart.uploadPart(chunkIndex + 1, rawFile.stream());
 
-  const uploadedPartsMap = partsJson ? (JSON.parse(partsJson) as Record<string, string>) : {};
-  uploadedPartsMap[String(chunkIndex + 1)] = uploadedPart.etag;
+  uploadedPartsMap[String(chunkIndex + 1)] = { etag: uploadedPart.etag, size: rawFile.size };
   await env.SESSIONS.put(partsKey, JSON.stringify(uploadedPartsMap), { expirationTtl: 86400 });
 
   if (chunkIndex < chunkCount - 1) {
@@ -231,7 +270,7 @@ app.post('/api/videos/upload', async (c) => {
   }
 
   const completedParts = Object.entries(uploadedPartsMap)
-    .map(([partNumber, etag]) => ({ partNumber: Number(partNumber), etag }))
+    .map(([partNumber, part]) => ({ partNumber: Number(partNumber), etag: part.etag }))
     .sort((a, b) => a.partNumber - b.partNumber);
 
   if (completedParts.length !== chunkCount) {
