@@ -33,6 +33,12 @@ const listVideosQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
+const trendingQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(50).default(12),
+});
+
+const TRENDING_CACHE_TTL_SECONDS = 300;
+
 const uploadMetadataSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().max(5000).optional().default(''),
@@ -52,6 +58,43 @@ app.use('/api/*', async (c, next) => {
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   c.set('user', session ? (session.user as SessionUser) : null);
   await next();
+});
+
+app.get('/api/videos/trending', async (c) => {
+  const parsed = trendingQuerySchema.safeParse(c.req.query());
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid query parameters', details: parsed.error.flatten() }, 400);
+  }
+
+  const { limit } = parsed.data;
+  const cacheKey = `trending:v1:limit=${limit}`;
+
+  const cached = await c.env.CACHE.get(cacheKey, 'json');
+  if (cached) {
+    return c.json({ limit, videos: cached, cached: true });
+  }
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT v.id, v.user_id, v.title, v.description, v.stream_video_id, v.view_count,
+            v.created_at, u.name AS channel_name,
+            COUNT(views.id) AS recent_views
+     FROM videos v
+     LEFT JOIN user u ON u.id = v.user_id
+     LEFT JOIN views ON views.video_id = v.id
+       AND views.viewed_at >= datetime('now', '-7 days')
+     WHERE v.deleted_at IS NULL
+     GROUP BY v.id
+     ORDER BY recent_views DESC, v.view_count DESC, v.created_at DESC
+     LIMIT ?`,
+  )
+    .bind(limit)
+    .all();
+
+  await c.env.CACHE.put(cacheKey, JSON.stringify(results), {
+    expirationTtl: TRENDING_CACHE_TTL_SECONDS,
+  });
+
+  return c.json({ limit, videos: results, cached: false });
 });
 
 app.get('/api/videos', async (c) => {

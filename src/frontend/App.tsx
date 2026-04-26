@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Watch } from './pages/Watch';
 import { Upload } from './pages/Upload';
@@ -5,6 +6,15 @@ import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { signOut, useSession } from './lib/auth-client';
 import './styles/strand.css';
+
+type TrendingVideo = {
+  id: string;
+  title: string;
+  description: string;
+  channel_name?: string | null;
+  view_count: number;
+  recent_views?: number;
+};
 
 function Wordmark({ size = 'lg' }: { size?: 'lg' | 'sm' }): JSX.Element {
   return (
@@ -64,13 +74,50 @@ function AppHeader(): JSX.Element {
 }
 
 const SUGGESTIONS: { title: string; helper: string; to: string }[] = [
-  { title: 'Browse trending', helper: 'See what people are watching today.', to: '/' },
   { title: 'Upload a clip', helper: 'Drop in an MP4, WebM, MOV, or MKV.', to: '/upload' },
   { title: 'Open a channel', helper: 'Visit a creator and skim their library.', to: '/channel/explore' },
   { title: 'Watch something', helper: 'Jump into a video by id.', to: '/watch/demo' },
 ];
 
+function TrendingCard({ video }: { video: TrendingVideo }): JSX.Element {
+  return (
+    <Link to={`/watch/${video.id}`} className="suggestion-card">
+      <div style={{ fontWeight: 700, fontSize: 'var(--text-base)' }}>{video.title}</div>
+      <div className="ds-meta" style={{ marginTop: 4 }}>
+        {video.channel_name ?? 'Unknown channel'} · {video.view_count} views
+      </div>
+    </Link>
+  );
+}
+
 function Home(): JSX.Element {
+  const [trending, setTrending] = useState<TrendingVideo[] | null>(null);
+  const [trendingError, setTrendingError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/videos/trending?limit=12')
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Failed to load trending videos');
+        }
+        return (await response.json()) as { videos: TrendingVideo[] };
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setTrending(data.videos);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setTrendingError(err instanceof Error ? err.message : 'Unknown error');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <main className="app-main app-main--narrow stack-lg fade-in">
       <section
@@ -81,6 +128,29 @@ function Home(): JSX.Element {
         <p className="ds-meta" style={{ maxWidth: 420 }}>
           A video host that respects your time. Upload, stream, share — no friction.
         </p>
+      </section>
+
+      <section className="stack-sm" aria-label="Trending">
+        <span className="ds-label">Trending this week</span>
+        {trendingError ? (
+          <p className="status-error">{trendingError}</p>
+        ) : trending === null ? (
+          <p className="ds-meta">Loading…</p>
+        ) : trending.length === 0 ? (
+          <p className="ds-meta">No trending videos yet — be the first to upload.</p>
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 'var(--space-3)',
+            }}
+          >
+            {trending.map((video) => (
+              <TrendingCard key={video.id} video={video} />
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="stack-sm" aria-label="Get started">
