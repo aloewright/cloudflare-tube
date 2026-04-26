@@ -49,6 +49,7 @@ dead_letter_queue = "video-encoding-dlq"
 # BETTER_AUTH_URL         (optional — public origin, e.g. https://spooool.workers.dev)
 # CLOUDFLARE_ACCOUNT_ID
 # CF_STREAM_API_TOKEN
+# CF_STREAM_WEBHOOK_SECRET (HMAC secret to verify Cloudflare Stream webhooks)
 # STREAM_ENABLED          (set to "true" to route uploads through Cloudflare Stream)
 # STRIPE_SECRET_KEY
 # STRIPE_WEBHOOK_SECRET
