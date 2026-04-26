@@ -291,6 +291,18 @@ code, kbd, pre, samp {
   gap: var(--space-2);
 }
 
+.app-header__search {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  margin: 0 var(--space-4);
+}
+
+.app-header__search .input {
+  width: 100%;
+  max-width: 480px;
+}
+
 .app-main {
   flex: 1;
   width: 100%;
@@ -438,6 +450,12 @@ code, kbd, pre, samp {
   transition:
     border-color 150ms var(--ease-smooth),
     box-shadow 150ms var(--ease-smooth);
+}
+
+.input--sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: var(--text-sm);
 }
 
 .input:hover { border-color: color-mix(in oklch, var(--ring), transparent 60%); }
