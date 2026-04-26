@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { z } from 'zod';
+import {
+  analyticsRoutes,
+  ensureSessionId,
+  shouldCountView,
+} from './analytics';
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
 import { channelRoutes } from './channels';
@@ -24,6 +29,10 @@ type SessionUser = {
   name: string;
 };
 
+interface AnalyticsEngineDataset {
+  writeDataPoint(point: { blobs?: string[]; doubles?: number[]; indexes?: string[] }): void;
+}
+
 type EnvBindings = AuthEnv & {
   VIDEOS: R2Bucket;
   DB: D1Database;
@@ -31,6 +40,7 @@ type EnvBindings = AuthEnv & {
   SESSIONS: KVNamespace;
   RATE_LIMITER: DurableObjectNamespace;
   VIDEO_ENCODING: Queue;
+  ANALYTICS?: AnalyticsEngineDataset;
   CF_STREAM_WEBHOOK_SECRET?: string;
   ALLOWED_ORIGINS?: string;
 };
@@ -88,6 +98,7 @@ app.route('/', channelRoutes);
 app.route('/', searchRoutes);
 app.route('/', likeRoutes);
 app.route('/', commentRoutes);
+app.route('/', analyticsRoutes);
 
 app.get('/api/videos/trending', async (c) => {
   const parsed = trendingQuerySchema.safeParse(c.req.query());
@@ -163,17 +174,35 @@ app.get('/api/videos/:id', async (c) => {
     return c.json({ error: 'Video not found' }, 404);
   }
 
-  await c.env.DB.prepare('UPDATE videos SET view_count = view_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-    .bind(id)
-    .run();
+  const user = c.get('user');
+  const { sid, setCookie } = ensureSessionId(c.req.header('cookie') ?? null);
+  // Dedup by user id when authenticated, else by anon session id, so opening
+  // the same tab twice in 12h doesn't double-count.
+  const identity = user ? `u:${user.id}` : `s:${sid}`;
+  const fresh = await shouldCountView(c.env.CACHE, id, identity);
 
-  await c.env.DB.prepare('INSERT INTO views (video_id, user_id, viewed_at) VALUES (?, ?, CURRENT_TIMESTAMP)')
-    .bind(id, c.get('user')?.id ?? null)
-    .run();
+  let viewCount = Number(video.view_count ?? 0);
+  if (fresh) {
+    await c.env.DB.prepare('UPDATE videos SET view_count = view_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(id)
+      .run();
+    await c.env.DB.prepare('INSERT INTO views (video_id, user_id, viewed_at) VALUES (?, ?, CURRENT_TIMESTAMP)')
+      .bind(id, user?.id ?? null)
+      .run();
+    viewCount += 1;
+
+    c.env.ANALYTICS?.writeDataPoint({
+      indexes: [id],
+      blobs: ['view', user?.id ?? '', sid],
+      doubles: [1],
+    });
+  }
+
+  if (setCookie) c.header('Set-Cookie', setCookie, { append: true });
 
   return c.json({
     ...video,
-    view_count: Number(video.view_count ?? 0) + 1,
+    view_count: viewCount,
   });
 });
 
