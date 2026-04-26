@@ -1,6 +1,9 @@
-import { Link, Navigate, Route, Routes } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Watch } from './pages/Watch';
 import { Upload } from './pages/Upload';
+import { Login } from './pages/Login';
+import { Signup } from './pages/Signup';
+import { signOut, useSession } from './lib/auth-client';
 import './styles/strand.css';
 
 function Wordmark({ size = 'lg' }: { size?: 'lg' | 'sm' }): JSX.Element {
@@ -11,17 +14,51 @@ function Wordmark({ size = 'lg' }: { size?: 'lg' | 'sm' }): JSX.Element {
   );
 }
 
+function HeaderNav(): JSX.Element {
+  const { data: session, isPending } = useSession();
+  const navigate = useNavigate();
+
+  if (isPending) {
+    return <span className="ds-meta">…</span>;
+  }
+
+  if (!session) {
+    return (
+      <nav className="app-header__nav">
+        <Link to="/login">
+          <button type="button" className="btn btn--ghost btn--sm">Sign in</button>
+        </Link>
+        <Link to="/signup">
+          <button type="button" className="btn btn--secondary btn--sm">Sign up</button>
+        </Link>
+      </nav>
+    );
+  }
+
+  return (
+    <nav className="app-header__nav">
+      <span className="ds-meta">{session.user.email}</span>
+      <Link to="/upload">
+        <button type="button" className="btn btn--secondary btn--sm">Upload</button>
+      </Link>
+      <button
+        type="button"
+        className="btn btn--ghost btn--sm"
+        onClick={() => {
+          void signOut().then(() => navigate('/', { replace: true }));
+        }}
+      >
+        Sign out
+      </button>
+    </nav>
+  );
+}
+
 function AppHeader(): JSX.Element {
   return (
     <header className="app-header">
       <Wordmark size="sm" />
-      <nav className="app-header__nav">
-        <Link to="/upload">
-          <button type="button" className="btn btn--secondary btn--sm">
-            Upload
-          </button>
-        </Link>
-      </nav>
+      <HeaderNav />
     </header>
   );
 }
@@ -36,7 +73,10 @@ const SUGGESTIONS: { title: string; helper: string; to: string }[] = [
 function Home(): JSX.Element {
   return (
     <main className="app-main app-main--narrow stack-lg fade-in">
-      <section className="stack-sm" style={{ alignItems: 'center', textAlign: 'center', paddingTop: 'var(--space-8)' }}>
+      <section
+        className="stack-sm"
+        style={{ alignItems: 'center', textAlign: 'center', paddingTop: 'var(--space-8)' }}
+      >
         <Wordmark />
         <p className="ds-meta" style={{ maxWidth: 420 }}>
           A video host that respects your time. Upload, stream, share — no friction.
@@ -75,14 +115,42 @@ function Channel(): JSX.Element {
   );
 }
 
+function RequireAuth({ children }: { children: JSX.Element }): JSX.Element {
+  const { data: session, isPending } = useSession();
+  const location = useLocation();
+
+  if (isPending) {
+    return (
+      <main className="app-main stack">
+        <p className="ds-meta">Loading…</p>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  return children;
+}
+
 export default function App(): JSX.Element {
   return (
     <div className="app-shell">
       <AppHeader />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/watch/:id" element={<Watch />} />
-        <Route path="/upload" element={<Upload />} />
+        <Route
+          path="/upload"
+          element={
+            <RequireAuth>
+              <Upload />
+            </RequireAuth>
+          }
+        />
         <Route path="/channel/:username" element={<Channel />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

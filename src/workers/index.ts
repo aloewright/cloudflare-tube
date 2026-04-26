@@ -2,38 +2,25 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { handleEncodingMessage } from './encoding';
+import { createAuth, type AuthEnv } from '../auth';
 
-type User = {
+type SessionUser = {
+  id: string;
   email: string;
-  sub: string;
-  name?: string;
+  name: string;
 };
 
-type EnvBindings = Record<string, unknown> & {
+type EnvBindings = AuthEnv & {
   VIDEOS: R2Bucket;
   DB: D1Database;
   CACHE: KVNamespace;
   SESSIONS: KVNamespace;
   RATE_LIMITER: DurableObjectNamespace;
   VIDEO_ENCODING: Queue;
-  REQUIRE_AUTH?: string;
 };
-
-const ANONYMOUS_USER: User = {
-  sub: 'anonymous',
-  email: 'anonymous@local',
-  name: 'Anonymous',
-};
-
-function resolveUploader(env: EnvBindings, user: User | null): User | null {
-  if (user) {
-    return user;
-  }
-  return env.REQUIRE_AUTH === 'true' ? null : ANONYMOUS_USER;
-}
 
 type Variables = {
-  user: User | null;
+  user: SessionUser | null;
 };
 
 const listVideosQuerySchema = z.object({
@@ -48,45 +35,21 @@ const uploadMetadataSchema = z.object({
 
 const app = new Hono<{ Bindings: EnvBindings; Variables: Variables }>();
 
-export function decodeJwtPayload(token: string): User | null {
-  const parts = token.split('.');
-  if (parts.length !== 3) {
-    return null;
-  }
+app.use('*', cors({ origin: (origin) => origin, credentials: true }));
 
-  try {
-    const base64Payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const paddedPayload = `${base64Payload}${'='.repeat((4 - (base64Payload.length % 4)) % 4)}`;
-    const json = atob(paddedPayload);
-    const payload = JSON.parse(json) as {
-      email?: string;
-      sub?: string;
-      name?: string;
-    };
-    if (!payload.email || !payload.sub) {
-      return null;
-    }
-    return {
-      email: payload.email,
-      sub: payload.sub,
-      name: payload.name,
-    };
-  } catch {
-    return null;
-  }
-}
-
-app.use('*', cors());
+app.all('/api/auth/*', async (c) => {
+  const auth = createAuth(c.env);
+  return auth.handler(c.req.raw);
+});
 
 app.use('/api/*', async (c, next) => {
-  const assertion = c.req.header('CF-Access-Jwt-Assertion');
-  const user = assertion ? decodeJwtPayload(assertion) : null;
-  c.set('user', user);
+  const auth = createAuth(c.env);
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  c.set('user', session ? (session.user as SessionUser) : null);
   await next();
 });
 
 app.get('/api/videos', async (c) => {
-  const env = c.env as EnvBindings;
   const parsed = listVideosQuerySchema.safeParse(c.req.query());
   if (!parsed.success) {
     return c.json({ error: 'Invalid query parameters', details: parsed.error.flatten() }, 400);
@@ -95,7 +58,7 @@ app.get('/api/videos', async (c) => {
   const { page, limit } = parsed.data;
   const offset = (page - 1) * limit;
 
-  const { results } = await env.DB.prepare(
+  const { results } = await c.env.DB.prepare(
     `SELECT id, user_id, title, description, r2_key, stream_video_id, status, view_count, created_at, updated_at
      FROM videos
      WHERE deleted_at IS NULL
@@ -105,20 +68,15 @@ app.get('/api/videos', async (c) => {
     .bind(limit, offset)
     .all();
 
-  return c.json({
-    page,
-    limit,
-    videos: results,
-  });
+  return c.json({ page, limit, videos: results });
 });
 
 app.get('/api/videos/:id', async (c) => {
-  const env = c.env as EnvBindings;
   const id = c.req.param('id');
-  const video = await env.DB.prepare(
-    `SELECT v.id, v.user_id, v.title, v.description, v.r2_key, v.stream_video_id, v.status, v.view_count, v.created_at, v.updated_at, u.username AS channel_name
+  const video = await c.env.DB.prepare(
+    `SELECT v.id, v.user_id, v.title, v.description, v.r2_key, v.stream_video_id, v.status, v.view_count, v.created_at, v.updated_at, u.name AS channel_name
      FROM videos v
-     LEFT JOIN users u ON u.id = v.user_id
+     LEFT JOIN user u ON u.id = v.user_id
      WHERE v.id = ? AND v.deleted_at IS NULL`,
   )
     .bind(id)
@@ -128,12 +86,12 @@ app.get('/api/videos/:id', async (c) => {
     return c.json({ error: 'Video not found' }, 404);
   }
 
-  await env.DB.prepare('UPDATE videos SET view_count = view_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+  await c.env.DB.prepare('UPDATE videos SET view_count = view_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .bind(id)
     .run();
 
-  await env.DB.prepare('INSERT INTO views (video_id, user_id, viewed_at) VALUES (?, ?, CURRENT_TIMESTAMP)')
-    .bind(id, c.get('user')?.sub ?? null)
+  await c.env.DB.prepare('INSERT INTO views (video_id, user_id, viewed_at) VALUES (?, ?, CURRENT_TIMESTAMP)')
+    .bind(id, c.get('user')?.id ?? null)
     .run();
 
   return c.json({
@@ -143,8 +101,8 @@ app.get('/api/videos/:id', async (c) => {
 });
 
 app.post('/api/videos/upload', async (c) => {
-  const env = c.env as EnvBindings;
-  const user = resolveUploader(env, c.get('user'));
+  const env = c.env;
+  const user = c.get('user');
   if (!user) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
@@ -187,53 +145,36 @@ app.post('/api/videos/upload', async (c) => {
 
   if (chunkCount === 1) {
     const videoId = crypto.randomUUID();
-    const r2Key = `${user.sub}/${videoId}/${rawFile.name}`;
+    const r2Key = `${user.id}/${videoId}/${rawFile.name}`;
 
     await env.VIDEOS.put(r2Key, rawFile.stream(), {
-      httpMetadata: {
-        contentType: rawFile.type,
-      },
+      httpMetadata: { contentType: rawFile.type },
     });
 
     await env.DB.prepare(
       `INSERT INTO videos (id, user_id, title, description, r2_key, status, view_count, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
-      .bind(
-        videoId,
-        user.sub,
-        metadataParsed.data.title,
-        metadataParsed.data.description,
-        r2Key,
-        'uploaded',
-      )
+      .bind(videoId, user.id, metadataParsed.data.title, metadataParsed.data.description, r2Key, 'uploaded')
       .run();
 
-    await env.VIDEO_ENCODING.send({
-      videoId,
-      r2Key,
-    });
+    await env.VIDEO_ENCODING.send({ videoId, r2Key });
 
-    return c.json({
-      id: videoId,
-      status: 'uploaded',
-    }, 201);
+    return c.json({ id: videoId, status: 'uploaded' }, 201);
   }
 
   const resolvedUploadId = uploadId ?? crypto.randomUUID();
 
-  const baseKvKey = `upload:${user.sub}:${resolvedUploadId}`;
+  const baseKvKey = `upload:${user.id}:${resolvedUploadId}`;
   const mpidKey = `${baseKvKey}:mpid`;
   const metaKey = `${baseKvKey}:meta`;
   const partsKey = `${baseKvKey}:parts`;
 
   if (chunkIndex === 0) {
     const videoId = crypto.randomUUID();
-    const r2Key = `${user.sub}/${videoId}/${rawFile.name}`;
+    const r2Key = `${user.id}/${videoId}/${rawFile.name}`;
     const multipart = await env.VIDEOS.createMultipartUpload(r2Key, {
-      httpMetadata: {
-        contentType: rawFile.type,
-      },
+      httpMetadata: { contentType: rawFile.type },
     });
 
     const firstPart = await multipart.uploadPart(1, rawFile.stream());
@@ -290,10 +231,7 @@ app.post('/api/videos/upload', async (c) => {
   }
 
   const completedParts = Object.entries(uploadedPartsMap)
-    .map(([partNumber, etag]) => ({
-      partNumber: Number(partNumber),
-      etag,
-    }))
+    .map(([partNumber, etag]) => ({ partNumber: Number(partNumber), etag }))
     .sort((a, b) => a.partNumber - b.partNumber);
 
   if (completedParts.length !== chunkCount) {
@@ -306,13 +244,10 @@ app.post('/api/videos/upload', async (c) => {
     `INSERT INTO videos (id, user_id, title, description, r2_key, status, view_count, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
   )
-    .bind(uploadMeta.videoId, user.sub, uploadMeta.title, uploadMeta.description, uploadMeta.r2Key, 'uploaded')
+    .bind(uploadMeta.videoId, user.id, uploadMeta.title, uploadMeta.description, uploadMeta.r2Key, 'uploaded')
     .run();
 
-  await env.VIDEO_ENCODING.send({
-    videoId: uploadMeta.videoId,
-    r2Key: uploadMeta.r2Key,
-  });
+  await env.VIDEO_ENCODING.send({ videoId: uploadMeta.videoId, r2Key: uploadMeta.r2Key });
 
   await Promise.all([env.SESSIONS.delete(mpidKey), env.SESSIONS.delete(metaKey), env.SESSIONS.delete(partsKey)]);
 
@@ -320,14 +255,13 @@ app.post('/api/videos/upload', async (c) => {
 });
 
 app.delete('/api/videos/:id', async (c) => {
-  const env = c.env as EnvBindings;
   const user = c.get('user');
   if (!user) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
   const id = c.req.param('id');
-  const video = await env.DB.prepare('SELECT id, user_id, r2_key FROM videos WHERE id = ? AND deleted_at IS NULL')
+  const video = await c.env.DB.prepare('SELECT id, user_id, r2_key FROM videos WHERE id = ? AND deleted_at IS NULL')
     .bind(id)
     .first<{ id: string; user_id: string; r2_key: string }>();
 
@@ -335,15 +269,15 @@ app.delete('/api/videos/:id', async (c) => {
     return c.json({ error: 'Video not found' }, 404);
   }
 
-  if (video.user_id !== user.sub) {
+  if (video.user_id !== user.id) {
     return c.json({ error: 'Forbidden' }, 403);
   }
 
-  await env.DB.prepare('UPDATE videos SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+  await c.env.DB.prepare('UPDATE videos SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .bind(id)
     .run();
 
-  await env.VIDEOS.delete(video.r2_key);
+  await c.env.VIDEOS.delete(video.r2_key);
 
   return c.json({ success: true });
 });

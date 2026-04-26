@@ -45,6 +45,8 @@ max_retries = 3
 dead_letter_queue = "video-encoding-dlq"
 
 # Secrets (set via: wrangler secret put <NAME>)
+# BETTER_AUTH_SECRET      (required — random 32+ byte string for signing sessions)
+# BETTER_AUTH_URL         (optional — public origin, e.g. https://spooool.workers.dev)
 # CLOUDFLARE_ACCOUNT_ID
 # CF_STREAM_API_TOKEN
 # STREAM_ENABLED          (set to "true" to route uploads through Cloudflare Stream)

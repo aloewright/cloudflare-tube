@@ -97,8 +97,11 @@ wrangler login
 # Create R2 bucket
 wrangler r2 bucket create cloudflare-tube-videos
 
-# Deploy database schema
+# Deploy database schema (includes better-auth tables)
 wrangler d1 migrations apply cloudflare-tube-prod
+
+# Set the better-auth signing secret (32+ random bytes)
+openssl rand -hex 32 | wrangler secret put BETTER_AUTH_SECRET
 
 # Deploy workers
 wrangler deploy

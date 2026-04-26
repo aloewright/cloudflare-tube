@@ -1,0 +1,96 @@
+import { FormEvent, useState } from 'react';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { signUp, useSession } from '../lib/auth-client';
+
+export function Signup(): JSX.Element {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { data: session, isPending } = useSession();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const next = (location.state as { from?: string } | null)?.from ?? '/';
+
+  if (!isPending && session) {
+    return <Navigate to={next} replace />;
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    const { error: signUpError } = await signUp.email({ email, password, name });
+    setSubmitting(false);
+    if (signUpError) {
+      setError(signUpError.message ?? 'Sign up failed');
+      return;
+    }
+    navigate(next, { replace: true });
+  }
+
+  return (
+    <main className="app-main app-main--narrow stack-lg fade-in">
+      <div className="stack-sm">
+        <span className="ds-label">Create account</span>
+        <h1 className="ds-h2">Sign up</h1>
+      </div>
+
+      <form onSubmit={(event) => void onSubmit(event)} className="card stack">
+        <div className="field">
+          <label className="field__label" htmlFor="signup-name">Name</label>
+          <input
+            id="signup-name"
+            className="input"
+            type="text"
+            autoComplete="name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+        </div>
+
+        <div className="field">
+          <label className="field__label" htmlFor="signup-email">Email</label>
+          <input
+            id="signup-email"
+            className="input"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+        </div>
+
+        <div className="field">
+          <label className="field__label" htmlFor="signup-password">Password</label>
+          <input
+            id="signup-password"
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            minLength={8}
+            required
+          />
+          <span className="ds-meta">8 characters minimum.</span>
+        </div>
+
+        <div className="row" style={{ justifyContent: 'space-between' }}>
+          <Link to="/login" state={{ from: next }} className="ds-meta">
+            Already have an account? Sign in
+          </Link>
+          <button type="submit" className="btn" disabled={submitting}>
+            {submitting ? 'Creating…' : 'Create account'}
+          </button>
+        </div>
+      </form>
+
+      {error ? <p className="status-error">{error}</p> : null}
+    </main>
+  );
+}
