@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
+import { channelRoutes } from './channels';
 import { csrfProtection, parseAllowedOrigins } from './csrf';
 import { securityHeaders } from './security-headers';
 import { handleStreamWebhook } from './stream-webhook';
@@ -80,6 +81,7 @@ app.use('/api/*', async (c, next) => {
 
 app.route('/', thumbnailRoutes);
 app.route('/', userRoutes);
+app.route('/', channelRoutes);
 
 app.get('/api/videos/trending', async (c) => {
   const parsed = trendingQuerySchema.safeParse(c.req.query());
