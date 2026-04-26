@@ -44,6 +44,11 @@ max_batch_timeout = 30
 max_retries = 3
 dead_letter_queue = "video-encoding-dlq"
 
+# Analytics Engine — view + watch-time datapoints (ALO-144)
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "spooool_video_analytics"
+
 [vars]
 # Comma-separated origin allow-list for CSRF protection on /api/*. Same-origin
 # is always allowed in addition to whatever is listed here. Override per env.

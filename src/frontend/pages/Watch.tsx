@@ -107,6 +107,44 @@ export function Watch(): JSX.Element {
     };
   }, [playbackUrl]);
 
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!id || !player) return;
+    const HEARTBEAT_MS = 10_000;
+    let lastTick = Date.now();
+
+    const ping = (): void => {
+      const p = playerRef.current;
+      if (!p || p.paused()) {
+        lastTick = Date.now();
+        return;
+      }
+      const now = Date.now();
+      const delta = Math.min(60, Math.max(0, (now - lastTick) / 1000));
+      lastTick = now;
+      if (delta < 1) return;
+      const position = typeof p.currentTime === 'function' ? p.currentTime() ?? 0 : 0;
+      void fetch(`/api/videos/${encodeURIComponent(id)}/heartbeat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delta, position }),
+        credentials: 'same-origin',
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+
+    const interval = window.setInterval(ping, HEARTBEAT_MS);
+    const onPlay = (): void => {
+      lastTick = Date.now();
+    };
+    player.on('play', onPlay);
+    return () => {
+      window.clearInterval(interval);
+      ping();
+      player.off('play', onPlay);
+    };
+  }, [id, playbackUrl]);
+
   if (error) {
     return (
       <main className="app-main stack">
