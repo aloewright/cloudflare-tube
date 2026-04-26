@@ -1,6 +1,7 @@
 import videojs from 'video.js';
 import type Player from 'video.js/dist/types/player';
 import 'video.js/dist/video-js.css';
+import '../styles/videojs-strand.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -90,7 +91,7 @@ export function Watch(): JSX.Element {
           boxShadow: 'var(--shadow-card)',
         }}
       >
-        <video ref={videoEl} className="video-js vjs-big-play-centered" />
+        <video ref={videoEl} className="video-js vjs-big-play-centered vjs-strand" />
       </div>
       <div className="stack-sm">
         <h1 className="ds-h2">{video.title}</h1>
