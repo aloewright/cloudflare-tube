@@ -9,6 +9,7 @@ import {
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
 import { channelRoutes } from './channels';
+import { commentRoutes } from './comments';
 import { csrfProtection, parseAllowedOrigins } from './csrf';
 import { likeRoutes } from './likes';
 import { securityHeaders } from './security-headers';
@@ -96,6 +97,7 @@ app.route('/', userRoutes);
 app.route('/', channelRoutes);
 app.route('/', searchRoutes);
 app.route('/', likeRoutes);
+app.route('/', commentRoutes);
 app.route('/', analyticsRoutes);
 
 app.get('/api/videos/trending', async (c) => {

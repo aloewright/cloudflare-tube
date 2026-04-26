@@ -4,6 +4,7 @@ import 'video.js/dist/video-js.css';
 import '../styles/videojs-strand.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Comments } from '../components/Comments';
 import { useSession } from '../lib/auth-client';
 
 type VideoResponse = {
@@ -202,6 +203,7 @@ export function Watch(): JSX.Element {
         </button>
       </div>
       {likeError ? <p className="status-error">{likeError}</p> : null}
+      {id ? <Comments videoId={id} /> : null}
     </main>
   );
 }
