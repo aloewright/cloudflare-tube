@@ -32,6 +32,7 @@ interface FakeRow {
   status: string;
   playback_hls_url: string | null;
   thumbnail_url: string | null;
+  thumbnail_candidates: string | null;
   updated_at: number;
 }
 
@@ -49,9 +50,10 @@ function makeFakeDB(seed: FakeRow[] = []): {
           return stmt;
         },
         async run() {
-          const [status, uid, playbackHls, thumbnail, whereUid] = bound as [
+          const [status, uid, playbackHls, thumbnail, candidates, whereUid] = bound as [
             string,
             string,
+            string | null,
             string | null,
             string | null,
             string,
@@ -63,6 +65,7 @@ function makeFakeDB(seed: FakeRow[] = []): {
               row.stream_video_id = uid;
               if (playbackHls !== null) row.playback_hls_url = playbackHls;
               if (thumbnail !== null) row.thumbnail_url = thumbnail;
+              if (candidates !== null) row.thumbnail_candidates = candidates;
               row.updated_at = Date.now();
               changes++;
             }
@@ -198,6 +201,7 @@ describe('handleStreamWebhook', () => {
         status: 'stream_submitted',
         playback_hls_url: null,
         thumbnail_url: null,
+        thumbnail_candidates: null,
         updated_at: 0,
       },
     ]);
@@ -226,6 +230,7 @@ describe('handleStreamWebhook', () => {
         status: 'stream_submitted',
         playback_hls_url: null,
         thumbnail_url: null,
+        thumbnail_candidates: null,
         updated_at: 0,
       },
     ]);
@@ -246,6 +251,7 @@ describe('handleStreamWebhook', () => {
         status: 'stream_submitted',
         playback_hls_url: null,
         thumbnail_url: null,
+        thumbnail_candidates: null,
         updated_at: 0,
       },
     ]);
@@ -266,6 +272,7 @@ describe('handleStreamWebhook', () => {
         status: 'stream_submitted',
         playback_hls_url: null,
         thumbnail_url: null,
+        thumbnail_candidates: null,
         updated_at: 0,
       },
     ]);
