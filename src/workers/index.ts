@@ -62,6 +62,22 @@ const trendingQuerySchema = z.object({
 });
 
 const TRENDING_CACHE_TTL_SECONDS = 300;
+export const VIDEO_META_CACHE_TTL_SECONDS = 60;
+export const videoMetaCacheKey = (id: string): string => `video:v1:${id}`;
+type CachedVideoMeta = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  r2_key: string;
+  stream_video_id: string | null;
+  status: string;
+  view_count: number;
+  created_at: string;
+  updated_at: string;
+  channel_name: string | null;
+  channel_username: string | null;
+};
 
 const uploadMetadataSchema = z.object({
   title: z.string().min(1).max(255),
@@ -165,19 +181,34 @@ app.get('/api/videos', async (c) => {
 
 app.get('/api/videos/:id', async (c) => {
   const id = c.req.param('id');
-  const video = await c.env.DB.prepare(
-    `SELECT v.id, v.user_id, v.title, v.description, v.r2_key, v.stream_video_id, v.status,
-            v.view_count, v.created_at, v.updated_at,
-            u.name AS channel_name, u.username AS channel_username
-     FROM videos v
-     LEFT JOIN user u ON u.id = v.user_id
-     WHERE v.id = ? AND v.deleted_at IS NULL`,
-  )
-    .bind(id)
-    .first();
+
+  const cacheKey = videoMetaCacheKey(id);
+  let video = await c.env.CACHE.get<CachedVideoMeta>(cacheKey, 'json');
+  let cacheHit = video !== null;
 
   if (!video) {
-    return c.json({ error: 'Video not found' }, 404);
+    video = await c.env.DB.prepare(
+      `SELECT v.id, v.user_id, v.title, v.description, v.r2_key, v.stream_video_id, v.status,
+              v.view_count, v.created_at, v.updated_at,
+              u.name AS channel_name, u.username AS channel_username
+       FROM videos v
+       LEFT JOIN user u ON u.id = v.user_id
+       WHERE v.id = ? AND v.deleted_at IS NULL`,
+    )
+      .bind(id)
+      .first<CachedVideoMeta>();
+
+    if (!video) {
+      return c.json({ error: 'Video not found' }, 404);
+    }
+
+    if (video.status === 'ready') {
+      // Only cache stable, viewable rows. Encoding/failed states change too
+      // often and aren't on the hot path anyway.
+      await c.env.CACHE.put(cacheKey, JSON.stringify(video), {
+        expirationTtl: VIDEO_META_CACHE_TTL_SECONDS,
+      });
+    }
   }
 
   const user = c.get('user');
@@ -206,6 +237,7 @@ app.get('/api/videos/:id', async (c) => {
 
   if (setCookie) c.header('Set-Cookie', setCookie, { append: true });
 
+  c.header('x-spooool-cache', cacheHit ? 'hit' : 'miss');
   return c.json({
     ...video,
     view_count: viewCount,
@@ -432,6 +464,7 @@ app.delete('/api/videos/:id', async (c) => {
     .run();
 
   await c.env.VIDEOS.delete(video.r2_key);
+  await c.env.CACHE.delete(videoMetaCacheKey(id));
 
   return c.json({ success: true });
 });
