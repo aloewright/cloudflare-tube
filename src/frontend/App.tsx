@@ -13,6 +13,9 @@ const Signup = lazy(() => import('./pages/Signup').then((m) => ({ default: m.Sig
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
 const Channel = lazy(() => import('./pages/Channel').then((m) => ({ default: m.Channel })));
 const Search = lazy(() => import('./pages/Search').then((m) => ({ default: m.Search })));
+const AdminModeration = lazy(() =>
+  import('./pages/AdminModeration').then((m) => ({ default: m.AdminModeration })),
+);
 
 function RouteFallback(): JSX.Element {
   return (
@@ -276,6 +279,14 @@ export default function App(): JSX.Element {
           />
           <Route path="/channel/:username" element={<Channel />} />
           <Route path="/search" element={<Search />} />
+          <Route
+            path="/admin/moderation"
+            element={
+              <RequireAuth>
+                <AdminModeration />
+              </RequireAuth>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

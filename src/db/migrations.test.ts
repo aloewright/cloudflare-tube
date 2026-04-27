@@ -32,4 +32,12 @@ describe('D1 migrations', () => {
     expect(schema).toContain('idx_views_video_viewed_at');
     expect(schema).toContain('idx_videos_active_created');
   });
+
+  it('0011_moderation introduces reports + audit log + hidden/banned columns (ALO-171)', () => {
+    const sql = readFileSync(join(MIGRATIONS_DIR, '0011_moderation.sql'), 'utf8');
+    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS reports/);
+    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS moderation_actions/);
+    expect(sql).toMatch(/ALTER TABLE videos ADD COLUMN hidden_at/);
+    expect(sql).toMatch(/ALTER TABLE user ADD COLUMN banned_at/);
+  });
 });

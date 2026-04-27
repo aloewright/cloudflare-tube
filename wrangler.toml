@@ -63,6 +63,10 @@ new_classes = ["ChannelSubscriberDO"]
 # is always allowed in addition to whatever is listed here. Override per env.
 ALLOWED_ORIGINS = ""
 
+# Comma-separated list of admin emails (ALO-171). Until a real role system
+# lands, the moderation routes gate on this list. See follow-up issue.
+ADMIN_EMAILS = ""
+
 # Secrets (set via: wrangler secret put <NAME>)
 # BETTER_AUTH_SECRET      (required — random 32+ byte string for signing sessions)
 # BETTER_AUTH_URL         (optional — public origin, e.g. https://spooool.workers.dev)
