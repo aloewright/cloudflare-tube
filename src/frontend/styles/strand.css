@@ -1,6 +1,6 @@
 /* ============================================================
    Strand Design System — tokens, base, primitives
-   Foundations: OKLCH near-greyscale, Nunito UI, Instrument Serif wordmark.
+   Foundations: OKLCH near-greyscale, Nunito throughout (UI + wordmark).
    ============================================================ */
 
 @font-face {
@@ -117,7 +117,7 @@
     "Geist Mono", "SF Mono", "Cascadia Code", "Fira Code",
     "JetBrains Mono", ui-monospace, monospace;
   --font-display:
-    "Instrument Serif", "Sour Gummy", ui-serif, Georgia, serif;
+    "Nunito", ui-sans-serif, system-ui, sans-serif;
 
   --text-xs: 11px;
   --text-sm: 12px;
