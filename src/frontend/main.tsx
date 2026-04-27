@@ -10,3 +10,10 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     </BrowserRouter>
   </React.StrictMode>,
 );
+
+// Lazy-load RUM so it never blocks first paint — web-vitals registers its
+// observers internally with passive listeners. Errors here must never break
+// the app render.
+void import('./lib/rum')
+  .then(({ startRum }) => startRum())
+  .catch(() => undefined);
