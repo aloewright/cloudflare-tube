@@ -170,6 +170,8 @@ export function Profile(): JSX.Element {
           <img
             src={profile.avatarUrl}
             alt="Current avatar"
+            decoding="async"
+            loading="lazy"
             style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover' }}
           />
         ) : (
@@ -189,6 +191,8 @@ export function Profile(): JSX.Element {
           <img
             src={profile.bannerUrl}
             alt="Current banner"
+            decoding="async"
+            loading="lazy"
             style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 8 }}
           />
         ) : (

@@ -161,6 +161,8 @@ export function Channel(): JSX.Element {
         <img
           src={header.bannerUrl}
           alt={`${header.displayName ?? 'channel'} banner`}
+          decoding="async"
+          fetchPriority="high"
           style={{ width: '100%', maxHeight: 240, objectFit: 'cover', borderRadius: 12 }}
         />
       ) : (
@@ -183,6 +185,8 @@ export function Channel(): JSX.Element {
           <img
             src={header.avatarUrl}
             alt=""
+            decoding="async"
+            fetchPriority="high"
             style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover' }}
           />
         ) : (
@@ -249,6 +253,8 @@ export function Channel(): JSX.Element {
                   <img
                     src={video.thumbnail_url}
                     alt=""
+                    loading="lazy"
+                    decoding="async"
                     style={{
                       width: '100%',
                       aspectRatio: '16/9',
