@@ -16,6 +16,7 @@ import { commentRoutes } from './comments';
 import { csrfProtection, parseAllowedOrigins } from './csrf';
 import { likeRoutes } from './likes';
 import { moderationRoutes } from './moderation';
+import { rolesRoutes } from './roles';
 import { securityHeaders } from './security-headers';
 import { rumRoutes } from './rum';
 import { searchRoutes } from './search';
@@ -140,6 +141,7 @@ app.route('/', analyticsRoutes);
 app.route('/', subscriptionRoutes);
 app.route('/', rumRoutes);
 app.route('/', moderationRoutes);
+app.route('/', rolesRoutes);
 app.route('/', accountRoutes);
 app.route('/', dmcaRoutes);
 

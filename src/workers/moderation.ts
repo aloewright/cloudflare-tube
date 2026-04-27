@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { isAdmin as isAdminRole } from './roles';
 
 export interface ModerationEnv {
   DB: D1Database;
@@ -20,6 +21,10 @@ export function parseAdminEmails(raw: string | undefined): Set<string> {
   );
 }
 
+// Synchronous shim retained for the small number of call-sites that don't have
+// an env handle yet. Prefer the async role-aware check in `roles.ts` for new
+// code — it consults the user_roles table first and only falls back to the
+// ADMIN_EMAILS bootstrap when no admin row exists.
 export function isAdmin(user: SessionUser, adminEmailsRaw: string | undefined): boolean {
   if (!user) return false;
   const allow = parseAdminEmails(adminEmailsRaw);
@@ -67,7 +72,7 @@ export const moderationRoutes = new Hono<{
 
 moderationRoutes.use('/api/admin/*', async (c, next) => {
   const user = c.get('user');
-  if (!isAdmin(user, c.env.ADMIN_EMAILS)) {
+  if (!(await isAdminRole(c.env, user))) {
     return c.json({ error: 'Forbidden' }, 403);
   }
   await next();
