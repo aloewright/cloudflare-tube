@@ -3,9 +3,17 @@ import type Player from 'video.js/dist/types/player';
 import 'video.js/dist/video-js.css';
 import '../styles/videojs-strand.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Comments } from '../components/Comments';
 import { useSession } from '../lib/auth-client';
+import { keyToPlayerAction } from '../lib/player-keys';
+import {
+  formatTimeParam,
+  loadStoredPosition,
+  parseTimeParam,
+  saveStoredPosition,
+  shouldResumeAt,
+} from '../lib/watch-position';
 
 type VideoResponse = {
   id: string;
@@ -17,8 +25,11 @@ type VideoResponse = {
   stream_video_id?: string;
 };
 
+const POSITION_SAVE_INTERVAL_MS = 5_000;
+
 export function Watch(): JSX.Element {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const { data: session } = useSession();
   const [video, setVideo] = useState<VideoResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,8 +39,12 @@ export function Watch(): JSX.Element {
   const [sub, setSub] = useState<{ subscribed: boolean; subscriberCount: number } | null>(null);
   const [subBusy, setSubBusy] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
   const videoEl = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<Player | null>(null);
+
+  const tParam = searchParams.get('t');
+  const startAt = useMemo(() => parseTimeParam(tParam), [tParam]);
 
   const playbackUrl = useMemo(() => {
     if (!video?.stream_video_id) {
@@ -160,6 +175,103 @@ export function Watch(): JSX.Element {
     };
   }, [playbackUrl]);
 
+  // ALO-146/147: seek to ?t= when present, otherwise resume from localStorage.
+  // Runs once per loadedmetadata so we know the duration before deciding.
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!id || !player) return;
+    let applied = false;
+    const onLoaded = (): void => {
+      if (applied) return;
+      applied = true;
+      const p = playerRef.current;
+      if (!p) return;
+      const duration = typeof p.duration === 'function' ? p.duration() ?? null : null;
+      const stored = loadStoredPosition(id, window.localStorage);
+      // ?t= wins over a resume position.
+      const target = startAt != null ? startAt : shouldResumeAt(stored, duration);
+      if (target != null && target > 0) {
+        const safe = duration != null && duration > 0 ? Math.min(target, duration - 1) : target;
+        p.currentTime(safe);
+      }
+    };
+    player.on('loadedmetadata', onLoaded);
+    return () => {
+      player.off('loadedmetadata', onLoaded);
+    };
+  }, [id, playbackUrl, startAt]);
+
+  // ALO-146: persist position. Save while playing on a 5s tick, on pause,
+  // and on tab hide (which is when most viewers vanish without "ending").
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!id || !player) return;
+
+    const persist = (): void => {
+      const p = playerRef.current;
+      if (!p) return;
+      const t = typeof p.currentTime === 'function' ? p.currentTime() ?? 0 : 0;
+      saveStoredPosition(id, t, window.localStorage);
+    };
+    const tick = (): void => {
+      const p = playerRef.current;
+      if (!p || p.paused()) return;
+      persist();
+    };
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'hidden') persist();
+    };
+
+    const interval = window.setInterval(tick, POSITION_SAVE_INTERVAL_MS);
+    player.on('pause', persist);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(interval);
+      persist();
+      player.off('pause', persist);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [id, playbackUrl]);
+
+  // ALO-188: window-level keyboard shortcuts.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      const action = keyToPlayerAction(event);
+      if (!action) return;
+      const p = playerRef.current;
+      if (!p) return;
+      event.preventDefault();
+      switch (action.type) {
+        case 'toggle-play':
+          if (p.paused()) {
+            void p.play();
+          } else {
+            p.pause();
+          }
+          return;
+        case 'seek-relative': {
+          const duration = typeof p.duration === 'function' ? p.duration() ?? 0 : 0;
+          const current = typeof p.currentTime === 'function' ? p.currentTime() ?? 0 : 0;
+          const next = Math.max(0, duration > 0 ? Math.min(current + action.seconds, duration) : current + action.seconds);
+          p.currentTime(next);
+          return;
+        }
+        case 'toggle-fullscreen':
+          if (p.isFullscreen()) {
+            void p.exitFullscreen();
+          } else {
+            void p.requestFullscreen();
+          }
+          return;
+        case 'toggle-mute':
+          p.muted(!p.muted());
+          return;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [playbackUrl]);
+
   useEffect(() => {
     const player = playerRef.current;
     if (!id || !player) return;
@@ -197,6 +309,29 @@ export function Watch(): JSX.Element {
       player.off('play', onPlay);
     };
   }, [id, playbackUrl]);
+
+  const shareAtCurrentTime = useCallback(async (): Promise<void> => {
+    const p = playerRef.current;
+    if (!p) return;
+    const t = typeof p.currentTime === 'function' ? Math.floor(p.currentTime() ?? 0) : 0;
+    const url = new URL(window.location.href);
+    if (t > 0) {
+      url.searchParams.set('t', formatTimeParam(t));
+    } else {
+      url.searchParams.delete('t');
+    }
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      // Clipboard API can be unavailable on insecure contexts; fall back to
+      // updating the address bar so the user can copy manually.
+      window.history.replaceState(null, '', url.toString());
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 2000);
+    }
+  }, []);
 
   if (error) {
     return (
@@ -262,9 +397,22 @@ export function Watch(): JSX.Element {
           {sub?.subscribed ? 'Subscribed' : 'Subscribe'}
           {sub ? ` · ${sub.subscriberCount}` : ''}
         </button>
+        <button
+          type="button"
+          className="btn btn--ghost"
+          onClick={() => {
+            void shareAtCurrentTime();
+          }}
+          aria-live="polite"
+        >
+          {shareCopied ? 'Link copied' : 'Share at current time'}
+        </button>
       </div>
       {likeError ? <p className="status-error">{likeError}</p> : null}
       {subError ? <p className="status-error">{subError}</p> : null}
+      <p className="ds-meta">
+        Shortcuts: space/k play · j/l ±10s · ←/→ ±5s · f fullscreen · m mute
+      </p>
       {id ? <Comments videoId={id} /> : null}
     </main>
   );
