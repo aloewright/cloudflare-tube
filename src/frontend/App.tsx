@@ -19,6 +19,9 @@ const AdminModeration = lazy(() =>
 const AccountSettings = lazy(() =>
   import('./pages/AccountSettings').then((m) => ({ default: m.AccountSettings })),
 );
+const DmcaForm = lazy(() => import('./pages/DmcaForm').then((m) => ({ default: m.DmcaForm })));
+const DmcaCounter = lazy(() => import('./pages/DmcaCounter').then((m) => ({ default: m.DmcaCounter })));
+const DmcaNotice = lazy(() => import('./pages/DmcaNotice').then((m) => ({ default: m.DmcaNotice })));
 
 function RouteFallback(): JSX.Element {
   return (
@@ -298,6 +301,16 @@ export default function App(): JSX.Element {
               </RequireAuth>
             }
           />
+          <Route path="/legal/dmca" element={<DmcaForm />} />
+          <Route
+            path="/legal/dmca/counter"
+            element={
+              <RequireAuth>
+                <DmcaCounter />
+              </RequireAuth>
+            }
+          />
+          <Route path="/dmca-notice/:videoId" element={<DmcaNotice />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
