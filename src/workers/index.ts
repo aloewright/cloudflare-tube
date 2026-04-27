@@ -13,6 +13,7 @@ import { channelRoutes } from './channels';
 import { commentRoutes } from './comments';
 import { csrfProtection, parseAllowedOrigins } from './csrf';
 import { likeRoutes } from './likes';
+import { moderationRoutes } from './moderation';
 import { securityHeaders } from './security-headers';
 import { rumRoutes } from './rum';
 import { searchRoutes } from './search';
@@ -47,6 +48,7 @@ type EnvBindings = AuthEnv & {
   ANALYTICS?: AnalyticsEngineDataset;
   CF_STREAM_WEBHOOK_SECRET?: string;
   ALLOWED_ORIGINS?: string;
+  ADMIN_EMAILS?: string;
 };
 
 type Variables = {
@@ -78,6 +80,7 @@ type CachedVideoMeta = {
   updated_at: string;
   channel_name: string | null;
   channel_username: string | null;
+  hidden_at: string | null;
 };
 
 const uploadMetadataSchema = z.object({
@@ -111,7 +114,16 @@ app.all('/api/auth/*', async (c) => {
 app.use('/api/*', async (c, next) => {
   const auth = createAuth(c.env);
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  c.set('user', session ? (session.user as SessionUser) : null);
+  let sessionUser = session ? (session.user as SessionUser) : null;
+  if (sessionUser) {
+    const banned = await c.env.DB.prepare('SELECT banned_at FROM user WHERE id = ?')
+      .bind(sessionUser.id)
+      .first<{ banned_at: number | null }>();
+    if (banned?.banned_at != null) {
+      sessionUser = null;
+    }
+  }
+  c.set('user', sessionUser);
   await next();
 });
 
@@ -124,6 +136,7 @@ app.route('/', commentRoutes);
 app.route('/', analyticsRoutes);
 app.route('/', subscriptionRoutes);
 app.route('/', rumRoutes);
+app.route('/', moderationRoutes);
 
 app.get('/api/videos/trending', async (c) => {
   const parsed = trendingQuerySchema.safeParse(c.req.query());
@@ -147,7 +160,7 @@ app.get('/api/videos/trending', async (c) => {
      LEFT JOIN user u ON u.id = v.user_id
      LEFT JOIN views ON views.video_id = v.id
        AND views.viewed_at >= datetime('now', '-7 days')
-     WHERE v.deleted_at IS NULL
+     WHERE v.deleted_at IS NULL AND v.hidden_at IS NULL
      GROUP BY v.id
      ORDER BY recent_views DESC, v.view_count DESC, v.created_at DESC
      LIMIT ?`,
@@ -174,7 +187,7 @@ app.get('/api/videos', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT id, user_id, title, description, r2_key, stream_video_id, status, view_count, created_at, updated_at
      FROM videos
-     WHERE deleted_at IS NULL
+     WHERE deleted_at IS NULL AND hidden_at IS NULL
      ORDER BY created_at DESC
      LIMIT ? OFFSET ?`,
   )
@@ -194,7 +207,7 @@ app.get('/api/videos/:id', async (c) => {
   if (!video) {
     video = await c.env.DB.prepare(
       `SELECT v.id, v.user_id, v.title, v.description, v.r2_key, v.stream_video_id, v.status,
-              v.view_count, v.created_at, v.updated_at,
+              v.view_count, v.created_at, v.updated_at, v.hidden_at,
               u.name AS channel_name, u.username AS channel_username
        FROM videos v
        LEFT JOIN user u ON u.id = v.user_id
@@ -207,9 +220,9 @@ app.get('/api/videos/:id', async (c) => {
       return c.json({ error: 'Video not found' }, 404);
     }
 
-    if (video.status === 'ready') {
-      // Only cache stable, viewable rows. Encoding/failed states change too
-      // often and aren't on the hot path anyway.
+    if (video.status === 'ready' && !video.hidden_at) {
+      // Only cache stable, viewable rows. Encoding/failed/hidden states change
+      // and aren't worth a stale cache.
       await c.env.CACHE.put(cacheKey, JSON.stringify(video), {
         expirationTtl: VIDEO_META_CACHE_TTL_SECONDS,
       });
@@ -217,6 +230,9 @@ app.get('/api/videos/:id', async (c) => {
   }
 
   const user = c.get('user');
+  if (video.hidden_at && video.user_id !== user?.id) {
+    return c.json({ error: 'Video not found' }, 404);
+  }
   const { sid, setCookie } = ensureSessionId(c.req.header('cookie') ?? null);
   // Dedup by user id when authenticated, else by anon session id, so opening
   // the same tab twice in 12h doesn't double-count.

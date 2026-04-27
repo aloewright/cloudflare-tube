@@ -16,10 +16,34 @@ CREATE TABLE IF NOT EXISTS videos (
   stream_video_id TEXT,
   status TEXT NOT NULL DEFAULT 'uploaded',
   view_count INTEGER NOT NULL DEFAULT 0,
+  hidden_at TEXT,
   deleted_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY,
+  reporter_user_id TEXT,
+  target_type TEXT NOT NULL CHECK (target_type IN ('video', 'comment')),
+  target_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  details TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'actioned', 'dismissed')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS moderation_actions (
+  id TEXT PRIMARY KEY,
+  report_id TEXT,
+  admin_user_id TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('approve', 'hide', 'ban', 'dismiss')),
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS comments (
@@ -84,3 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_views_video_viewed_at ON views(video_id, viewed_a
 CREATE INDEX IF NOT EXISTS idx_subscriptions_subscriber ON subscriptions(subscriber_user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_channel ON subscriptions(channel_user_id);
 CREATE INDEX IF NOT EXISTS idx_playlist_videos_position ON playlist_videos(playlist_id, position);
+CREATE INDEX IF NOT EXISTS idx_reports_status_updated ON reports(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_moderation_actions_report ON moderation_actions(report_id);
+CREATE INDEX IF NOT EXISTS idx_moderation_actions_target ON moderation_actions(target_type, target_id);
