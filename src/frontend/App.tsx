@@ -208,22 +208,27 @@ function Home(): JSX.Element {
     <main className="app-main app-main--narrow stack-lg fade-in">
       <section
         className="stack-sm"
-        style={{ alignItems: 'center', textAlign: 'center', paddingTop: 'var(--space-8)' }}
+        style={{
+          alignItems: 'center',
+          textAlign: 'center',
+          paddingTop: 'var(--space-8)',
+          paddingBottom: 'var(--space-4)',
+        }}
       >
         <Wordmark />
-        <p className="ds-meta" style={{ maxWidth: 420 }}>
+        <p className="ds-lede" style={{ maxWidth: 480, margin: '0 auto' }}>
           A video host that respects your time. Upload, stream, share — no friction.
         </p>
       </section>
 
       <section className="stack-sm" aria-label="Trending">
-        <span className="ds-label">Trending this week</span>
+        <h2 className="ds-h3" style={{ margin: 0 }}>Trending this week</h2>
         {trendingError ? (
           <p className="status-error">{trendingError}</p>
         ) : trending === null ? (
-          <p className="ds-meta">Loading…</p>
+          <p className="ds-empty">Loading…</p>
         ) : trending.length === 0 ? (
-          <p className="ds-meta">No trending videos yet — be the first to upload.</p>
+          <p className="ds-empty">No trending videos yet — be the first to upload.</p>
         ) : (
           <div
             style={{
@@ -240,7 +245,7 @@ function Home(): JSX.Element {
       </section>
 
       <section className="stack-sm" aria-label="Get started">
-        <span className="ds-label">Start here</span>
+        <h2 className="ds-h3" style={{ margin: 0 }}>Start here</h2>
         <div
           style={{
             display: 'grid',

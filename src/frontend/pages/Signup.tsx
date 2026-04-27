@@ -33,7 +33,7 @@ export function Signup(): JSX.Element {
 
   return (
     <main className="app-main app-main--narrow stack-lg fade-in">
-      <div className="stack-sm">
+      <div className="stack-sm" style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-3)' }}>
         <span className="ds-label">Create account</span>
         <h1 className="ds-h2">Sign up</h1>
       </div>

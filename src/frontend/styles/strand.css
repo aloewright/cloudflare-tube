@@ -243,6 +243,19 @@ code, kbd, pre, samp {
 .ds-h2 { font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.015em; }
 .ds-h3 { font-size: var(--text-xl); font-weight: 600; letter-spacing: -0.015em; }
 .ds-meta { font-size: var(--text-xs); color: var(--muted-foreground); }
+.ds-lede {
+  font-size: var(--text-lg);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.ds-empty {
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  text-align: center;
+  padding: var(--space-6) 0;
+}
 .ds-label {
   font-size: 10px;
   font-weight: 600;
