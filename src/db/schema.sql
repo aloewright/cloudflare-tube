@@ -23,10 +23,46 @@ CREATE TABLE IF NOT EXISTS videos (
   status TEXT NOT NULL DEFAULT 'uploaded',
   view_count INTEGER NOT NULL DEFAULT 0,
   hidden_at TEXT,
+  dmca_status TEXT,
+  dmca_restore_eligible_at INTEGER,
   deleted_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS dmca_claims (
+  id TEXT PRIMARY KEY,
+  video_id TEXT NOT NULL,
+  complainant_name TEXT NOT NULL,
+  complainant_email TEXT NOT NULL,
+  complainant_address TEXT NOT NULL,
+  complainant_phone TEXT NOT NULL,
+  copyrighted_work TEXT NOT NULL,
+  infringing_urls TEXT NOT NULL,
+  good_faith_signed INTEGER NOT NULL DEFAULT 0,
+  perjury_signed INTEGER NOT NULL DEFAULT 0,
+  signature TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'disabled', 'dismissed', 'counter_pending', 'restored')),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY (video_id) REFERENCES videos(id)
+);
+
+CREATE TABLE IF NOT EXISTS dmca_counter_notices (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL,
+  uploader_user_id TEXT NOT NULL,
+  uploader_name TEXT NOT NULL,
+  uploader_address TEXT NOT NULL,
+  uploader_phone TEXT NOT NULL,
+  uploader_email TEXT NOT NULL,
+  statement TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  consent_to_jurisdiction INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (claim_id) REFERENCES dmca_claims(id)
 );
 
 CREATE TABLE IF NOT EXISTS reports (
@@ -118,3 +154,6 @@ CREATE INDEX IF NOT EXISTS idx_reports_status_updated ON reports(status, updated
 CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_moderation_actions_report ON moderation_actions(report_id);
 CREATE INDEX IF NOT EXISTS idx_moderation_actions_target ON moderation_actions(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_dmca_claims_status ON dmca_claims(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dmca_claims_video ON dmca_claims(video_id);
+CREATE INDEX IF NOT EXISTS idx_dmca_counter_claim ON dmca_counter_notices(claim_id);

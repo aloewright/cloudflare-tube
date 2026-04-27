@@ -47,4 +47,12 @@ describe('D1 migrations', () => {
     expect(sql).toMatch(/ALTER TABLE user ADD COLUMN deletion_scheduled_for/);
     expect(sql).toMatch(/idx_user_deletion_scheduled/);
   });
+
+  it('0013_dmca adds claim/counter-notice tables + status columns (ALO-170)', () => {
+    const sql = readFileSync(join(MIGRATIONS_DIR, '0013_dmca.sql'), 'utf8');
+    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS dmca_claims/);
+    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS dmca_counter_notices/);
+    expect(sql).toMatch(/ALTER TABLE videos ADD COLUMN dmca_status/);
+    expect(sql).toMatch(/ALTER TABLE videos ADD COLUMN dmca_restore_eligible_at/);
+  });
 });

@@ -8,6 +8,7 @@ import {
 } from './analytics';
 import { accountRoutes, runDeletionSweep } from './account';
 import { ChannelSubscriberDO, triggerFanOut } from './channel-do';
+import { dmcaRoutes, runDmcaRestoreSweep } from './dmca';
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
 import { channelRoutes } from './channels';
@@ -82,6 +83,7 @@ type CachedVideoMeta = {
   channel_name: string | null;
   channel_username: string | null;
   hidden_at: string | null;
+  dmca_status: string | null;
 };
 
 const uploadMetadataSchema = z.object({
@@ -139,6 +141,7 @@ app.route('/', subscriptionRoutes);
 app.route('/', rumRoutes);
 app.route('/', moderationRoutes);
 app.route('/', accountRoutes);
+app.route('/', dmcaRoutes);
 
 app.get('/api/videos/trending', async (c) => {
   const parsed = trendingQuerySchema.safeParse(c.req.query());
@@ -209,7 +212,7 @@ app.get('/api/videos/:id', async (c) => {
   if (!video) {
     video = await c.env.DB.prepare(
       `SELECT v.id, v.user_id, v.title, v.description, v.r2_key, v.stream_video_id, v.status,
-              v.view_count, v.created_at, v.updated_at, v.hidden_at,
+              v.view_count, v.created_at, v.updated_at, v.hidden_at, v.dmca_status,
               u.name AS channel_name, u.username AS channel_username
        FROM videos v
        LEFT JOIN user u ON u.id = v.user_id
@@ -222,9 +225,9 @@ app.get('/api/videos/:id', async (c) => {
       return c.json({ error: 'Video not found' }, 404);
     }
 
-    if (video.status === 'ready' && !video.hidden_at) {
-      // Only cache stable, viewable rows. Encoding/failed/hidden states change
-      // and aren't worth a stale cache.
+    if (video.status === 'ready' && !video.hidden_at && !video.dmca_status) {
+      // Only cache stable, viewable rows. Encoding/failed/hidden/DMCA states
+      // change and aren't worth a stale cache.
       await c.env.CACHE.put(cacheKey, JSON.stringify(video), {
         expirationTtl: VIDEO_META_CACHE_TTL_SECONDS,
       });
@@ -232,6 +235,11 @@ app.get('/api/videos/:id', async (c) => {
   }
 
   const user = c.get('user');
+  if (video.dmca_status === 'disabled') {
+    // 451 Unavailable For Legal Reasons. The SPA renders /dmca-notice/:id when
+    // it sees this response.
+    return c.json({ error: 'Unavailable for legal reasons', dmca: true }, 451);
+  }
   if (video.hidden_at && video.user_id !== user?.id) {
     return c.json({ error: 'Video not found' }, 404);
   }
@@ -519,8 +527,12 @@ export default {
           if (stats.length > 0) {
             console.log('[deletion-sweep]', { cron: event.cron, deleted: stats });
           }
+          const restored = await runDmcaRestoreSweep(env);
+          if (restored.length > 0) {
+            console.log('[dmca-restore-sweep]', { cron: event.cron, restored });
+          }
         } catch (err) {
-          console.error('deletion sweep failed', {
+          console.error('scheduled sweep failed', {
             error: err instanceof Error ? err.message : String(err),
           });
         }
