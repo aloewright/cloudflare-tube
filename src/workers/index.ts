@@ -67,8 +67,7 @@ const trendingQuerySchema = z.object({
 });
 
 const TRENDING_CACHE_TTL_SECONDS = 300;
-export const VIDEO_META_CACHE_TTL_SECONDS = 60;
-export const videoMetaCacheKey = (id: string): string => `video:v1:${id}`;
+import { VIDEO_META_CACHE_TTL_SECONDS, videoMetaCacheKey } from './video-meta-cache';
 type CachedVideoMeta = {
   id: string;
   user_id: string;

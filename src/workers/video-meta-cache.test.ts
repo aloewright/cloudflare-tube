@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VIDEO_META_CACHE_TTL_SECONDS, videoMetaCacheKey } from './index';
+import { VIDEO_META_CACHE_TTL_SECONDS, videoMetaCacheKey } from './video-meta-cache';
 
 describe('video metadata KV cache (ALO-201)', () => {
   it('namespaces keys under video:v1:<id> so other ids cant collide', () => {
