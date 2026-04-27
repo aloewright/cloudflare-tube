@@ -28,6 +28,8 @@ import {
   validateChunkShape,
   validateInitialFile,
 } from './upload-validation';
+import { VIDEO_META_CACHE_TTL_SECONDS, videoMetaCacheKey } from './video-meta-cache';
+import * as Sentry from '@sentry/cloudflare';
 
 type SessionUser = {
   id: string;
@@ -44,13 +46,14 @@ type EnvBindings = AuthEnv & {
   DB: D1Database;
   CACHE: KVNamespace;
   SESSIONS: KVNamespace;
-  RATE_LIMITER: DurableObjectNamespace;
+  RATE_LIMITER?: DurableObjectNamespace;
   CHANNEL_SUBSCRIBER_DO?: DurableObjectNamespace;
   VIDEO_ENCODING: Queue;
   ANALYTICS?: AnalyticsEngineDataset;
   CF_STREAM_WEBHOOK_SECRET?: string;
   ALLOWED_ORIGINS?: string;
   ADMIN_EMAILS?: string;
+  SENTRY_DSN?: string;
 };
 
 type Variables = {
@@ -67,7 +70,6 @@ const trendingQuerySchema = z.object({
 });
 
 const TRENDING_CACHE_TTL_SECONDS = 300;
-import { VIDEO_META_CACHE_TTL_SECONDS, videoMetaCacheKey } from './video-meta-cache';
 type CachedVideoMeta = {
   id: string;
   user_id: string;
@@ -501,7 +503,7 @@ app.delete('/api/videos/:id', async (c) => {
 
 export { ChannelSubscriberDO };
 
-export default {
+const workerHandlers = {
   fetch: app.fetch,
   async queue(batch: MessageBatch<unknown>, env: EnvBindings): Promise<void> {
     for (const message of batch.messages) {
@@ -516,7 +518,7 @@ export default {
       }
     }
   },
-  async scheduled(event: ScheduledEvent, env: EnvBindings, ctx: ExecutionContext): Promise<void> {
+  async scheduled(controller: ScheduledController, env: EnvBindings, ctx: ExecutionContext): Promise<void> {
     // ALO-132: hard-delete users whose 30-day grace window has elapsed.
     // The cron is configured in wrangler.toml under [triggers] crons.
     ctx.waitUntil(
@@ -524,11 +526,11 @@ export default {
         try {
           const stats = await runDeletionSweep(env);
           if (stats.length > 0) {
-            console.log('[deletion-sweep]', { cron: event.cron, deleted: stats });
+            console.log('[deletion-sweep]', { cron: controller.cron, deleted: stats });
           }
           const restored = await runDmcaRestoreSweep(env);
           if (restored.length > 0) {
-            console.log('[dmca-restore-sweep]', { cron: event.cron, restored });
+            console.log('[dmca-restore-sweep]', { cron: controller.cron, restored });
           }
         } catch (err) {
           console.error('scheduled sweep failed', {
@@ -539,3 +541,11 @@ export default {
     );
   },
 };
+
+export default Sentry.withSentry(
+  (env: EnvBindings) => ({
+    dsn: env.SENTRY_DSN ?? '',
+    tracesSampleRate: 0.1,
+  }),
+  workerHandlers,
+);

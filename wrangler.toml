@@ -81,3 +81,7 @@ ADMIN_EMAILS = "aloewright@gmail.com"
 # STREAM_ENABLED          (set to "true" to route uploads through Cloudflare Stream)
 # STRIPE_SECRET_KEY
 # STRIPE_WEBHOOK_SECRET
+# SENTRY_DSN              (worker error tracking — get from sentry.io project settings)
+#
+# Frontend env vars (set in .env.production or CI):
+# VITE_SENTRY_DSN         (same DSN — Vite exposes this to the browser bundle)
