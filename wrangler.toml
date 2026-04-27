@@ -70,7 +70,7 @@ ALLOWED_ORIGINS = ""
 
 # Comma-separated list of admin emails (ALO-171). Until a real role system
 # lands, the moderation routes gate on this list. See follow-up issue.
-ADMIN_EMAILS = ""
+ADMIN_EMAILS = "aloewright@gmail.com"
 
 # Secrets (set via: wrangler secret put <NAME>)
 # BETTER_AUTH_SECRET      (required — random 32+ byte string for signing sessions)

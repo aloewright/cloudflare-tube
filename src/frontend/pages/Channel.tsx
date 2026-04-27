@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSession } from '../lib/auth-client';
+import { VideoPlaceholderIcon } from '../components/Icons';
 
 interface ChannelHeader {
   id: string;
@@ -263,7 +264,9 @@ export function Channel(): JSX.Element {
                       marginBottom: 'var(--space-2)',
                     }}
                   />
-                ) : null}
+                ) : (
+                  <VideoPlaceholderIcon />
+                )}
                 <div style={{ fontWeight: 700, fontSize: 'var(--text-base)' }}>{video.title}</div>
                 <div className="ds-meta" style={{ marginTop: 4 }}>
                   {video.view_count} views

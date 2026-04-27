@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { VideoPlaceholderIcon } from '../components/Icons';
 
 interface SearchResult {
   id: string;
@@ -78,6 +79,23 @@ export function Search(): JSX.Element {
           {results.map((v) => (
             <li key={v.id}>
               <Link to={`/watch/${v.id}`} className="suggestion-card">
+                {v.thumbnail_url ? (
+                  <img
+                    src={v.thumbnail_url}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    style={{
+                      width: '100%',
+                      aspectRatio: '16/9',
+                      objectFit: 'cover',
+                      borderRadius: 8,
+                      marginBottom: 'var(--space-2)',
+                    }}
+                  />
+                ) : (
+                  <VideoPlaceholderIcon />
+                )}
                 <div style={{ fontWeight: 700 }}>{v.title}</div>
                 <div className="ds-meta" style={{ marginTop: 4 }}>
                   {v.channel_username ? (

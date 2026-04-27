@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { signOut, useSession } from './lib/auth-client';
+import { ChannelIcon, PlayIcon, UploadIcon, VideoPlaceholderIcon } from './components/Icons';
 import './styles/strand.css';
 
 // Route-level code splitting: each page (and the video.js it depends on for
@@ -36,6 +37,7 @@ type TrendingVideo = {
   title: string;
   description: string;
   channel_name?: string | null;
+  thumbnail_url?: string | null;
   view_count: number;
   recent_views?: number;
 };
@@ -135,15 +137,37 @@ function AppHeader(): JSX.Element {
   );
 }
 
-const SUGGESTIONS: { title: string; helper: string; to: string }[] = [
-  { title: 'Upload a clip', helper: 'Drop in an MP4, WebM, MOV, or MKV.', to: '/upload' },
-  { title: 'Open a channel', helper: 'Visit a creator and skim their library.', to: '/channel/explore' },
-  { title: 'Watch something', helper: 'Jump into a video by id.', to: '/watch/demo' },
+const SUGGESTIONS: {
+  title: string;
+  helper: string;
+  to: string;
+  Icon: (props: { className?: string; style?: React.CSSProperties }) => JSX.Element;
+}[] = [
+  { title: 'Upload a clip', helper: 'Drop in an MP4, WebM, MOV, or MKV.', to: '/upload', Icon: UploadIcon },
+  { title: 'Open a channel', helper: 'Visit a creator and skim their library.', to: '/channel/explore', Icon: ChannelIcon },
+  { title: 'Watch something', helper: 'Jump into a video by id.', to: '/watch/demo', Icon: PlayIcon },
 ];
 
 function TrendingCard({ video }: { video: TrendingVideo }): JSX.Element {
   return (
     <Link to={`/watch/${video.id}`} className="suggestion-card">
+      {video.thumbnail_url ? (
+        <img
+          src={video.thumbnail_url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          style={{
+            width: '100%',
+            aspectRatio: '16/9',
+            objectFit: 'cover',
+            borderRadius: 8,
+            marginBottom: 'var(--space-2)',
+          }}
+        />
+      ) : (
+        <VideoPlaceholderIcon />
+      )}
       <div style={{ fontWeight: 700, fontSize: 'var(--text-base)' }}>{video.title}</div>
       <div className="ds-meta" style={{ marginTop: 4 }}>
         {video.channel_name ?? 'Unknown channel'} · {video.view_count} views
@@ -226,6 +250,21 @@ function Home(): JSX.Element {
         >
           {SUGGESTIONS.map((item) => (
             <Link key={item.title} to={item.to} className="suggestion-card">
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 44,
+                  height: 44,
+                  borderRadius: 10,
+                  marginBottom: 'var(--space-2)',
+                  background: 'color-mix(in oklch, var(--accent), transparent 85%)',
+                  color: 'var(--accent)',
+                }}
+              >
+                <item.Icon />
+              </div>
               <div style={{ fontWeight: 700, fontSize: 'var(--text-base)' }}>{item.title}</div>
               <div className="ds-meta" style={{ marginTop: 4 }}>
                 {item.helper}

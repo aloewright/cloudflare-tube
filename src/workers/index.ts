@@ -158,8 +158,8 @@ app.get('/api/videos/trending', async (c) => {
   }
 
   const { results } = await c.env.DB.prepare(
-    `SELECT v.id, v.user_id, v.title, v.description, v.stream_video_id, v.view_count,
-            v.created_at, u.name AS channel_name,
+    `SELECT v.id, v.user_id, v.title, v.description, v.stream_video_id, v.thumbnail_url,
+            v.view_count, v.created_at, u.name AS channel_name,
             COUNT(views.id) AS recent_views
      FROM videos v
      LEFT JOIN user u ON u.id = v.user_id
