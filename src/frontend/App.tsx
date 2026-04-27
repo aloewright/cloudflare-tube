@@ -16,6 +16,9 @@ const Search = lazy(() => import('./pages/Search').then((m) => ({ default: m.Sea
 const AdminModeration = lazy(() =>
   import('./pages/AdminModeration').then((m) => ({ default: m.AdminModeration })),
 );
+const AccountSettings = lazy(() =>
+  import('./pages/AccountSettings').then((m) => ({ default: m.AccountSettings })),
+);
 
 function RouteFallback(): JSX.Element {
   return (
@@ -284,6 +287,14 @@ export default function App(): JSX.Element {
             element={
               <RequireAuth>
                 <AdminModeration />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings/account"
+            element={
+              <RequireAuth>
+                <AccountSettings />
               </RequireAuth>
             }
           />
