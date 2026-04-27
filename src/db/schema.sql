@@ -3,9 +3,15 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   username TEXT NOT NULL UNIQUE,
   display_name TEXT,
+  deletion_requested_at INTEGER,
+  deletion_scheduled_for INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_user_deletion_scheduled
+  ON users(deletion_scheduled_for)
+  WHERE deletion_scheduled_for IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS videos (
   id TEXT PRIMARY KEY,

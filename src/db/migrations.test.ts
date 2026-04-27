@@ -40,4 +40,11 @@ describe('D1 migrations', () => {
     expect(sql).toMatch(/ALTER TABLE videos ADD COLUMN hidden_at/);
     expect(sql).toMatch(/ALTER TABLE user ADD COLUMN banned_at/);
   });
+
+  it('0012_account_deletion adds GDPR grace columns + index (ALO-132)', () => {
+    const sql = readFileSync(join(MIGRATIONS_DIR, '0012_account_deletion.sql'), 'utf8');
+    expect(sql).toMatch(/ALTER TABLE user ADD COLUMN deletion_requested_at/);
+    expect(sql).toMatch(/ALTER TABLE user ADD COLUMN deletion_scheduled_for/);
+    expect(sql).toMatch(/idx_user_deletion_scheduled/);
+  });
 });

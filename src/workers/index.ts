@@ -6,6 +6,7 @@ import {
   ensureSessionId,
   shouldCountView,
 } from './analytics';
+import { accountRoutes, runDeletionSweep } from './account';
 import { ChannelSubscriberDO, triggerFanOut } from './channel-do';
 import { handleEncodingMessage } from './encoding';
 import { createAuth, type AuthEnv } from '../auth';
@@ -137,6 +138,7 @@ app.route('/', analyticsRoutes);
 app.route('/', subscriptionRoutes);
 app.route('/', rumRoutes);
 app.route('/', moderationRoutes);
+app.route('/', accountRoutes);
 
 app.get('/api/videos/trending', async (c) => {
   const parsed = trendingQuerySchema.safeParse(c.req.query());
@@ -506,5 +508,23 @@ export default {
         message.retry();
       }
     }
+  },
+  async scheduled(event: ScheduledEvent, env: EnvBindings, ctx: ExecutionContext): Promise<void> {
+    // ALO-132: hard-delete users whose 30-day grace window has elapsed.
+    // The cron is configured in wrangler.toml under [triggers] crons.
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const stats = await runDeletionSweep(env);
+          if (stats.length > 0) {
+            console.log('[deletion-sweep]', { cron: event.cron, deleted: stats });
+          }
+        } catch (err) {
+          console.error('deletion sweep failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      })(),
+    );
   },
 };
