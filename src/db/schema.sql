@@ -77,8 +77,10 @@ CREATE TABLE IF NOT EXISTS playlist_videos (
 
 CREATE INDEX IF NOT EXISTS idx_videos_user_id ON videos(user_id);
 CREATE INDEX IF NOT EXISTS idx_videos_created_at ON videos(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_videos_active_created ON videos(deleted_at, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_comments_video_id ON comments(video_id);
 CREATE INDEX IF NOT EXISTS idx_views_video_id ON views(video_id);
+CREATE INDEX IF NOT EXISTS idx_views_video_viewed_at ON views(video_id, viewed_at);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_subscriber ON subscriptions(subscriber_user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_channel ON subscriptions(channel_user_id);
 CREATE INDEX IF NOT EXISTS idx_playlist_videos_position ON playlist_videos(playlist_id, position);

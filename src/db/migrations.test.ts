@@ -1,0 +1,35 @@
+/// <reference types="node" />
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const MIGRATIONS_DIR = join(HERE, 'migrations');
+const SCHEMA_PATH = join(HERE, 'schema.sql');
+
+describe('D1 migrations', () => {
+  it('migrations are applied in numeric order', () => {
+    const files = readdirSync(MIGRATIONS_DIR)
+      .filter((f: string) => f.endsWith('.sql'))
+      .sort();
+    expect(files.length).toBeGreaterThan(0);
+    files.forEach((f: string, i: number) => {
+      const prefix = f.split('_')[0];
+      expect(prefix).toMatch(/^\d{4}$/);
+      expect(Number(prefix)).toBe(i + 1);
+    });
+  });
+
+  it('0010_perf_indexes adds composite indexes for trending + soft-delete (ALO-200)', () => {
+    const sql = readFileSync(join(MIGRATIONS_DIR, '0010_perf_indexes.sql'), 'utf8');
+    expect(sql).toMatch(/idx_views_video_viewed_at\s+ON\s+views\(video_id,\s*viewed_at\)/i);
+    expect(sql).toMatch(/idx_videos_active_created\s+ON\s+videos\(deleted_at,\s*created_at DESC\)/i);
+  });
+
+  it('schema.sql mirrors the perf indexes from 0010', () => {
+    const schema = readFileSync(SCHEMA_PATH, 'utf8');
+    expect(schema).toContain('idx_views_video_viewed_at');
+    expect(schema).toContain('idx_videos_active_created');
+  });
+});
