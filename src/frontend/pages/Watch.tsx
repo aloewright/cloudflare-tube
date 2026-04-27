@@ -209,7 +209,7 @@ export function Watch(): JSX.Element {
   if (!video) {
     return (
       <main className="app-main stack">
-        <p className="ds-meta">Loading…</p>
+        <p className="ds-empty">Loading…</p>
       </main>
     );
   }

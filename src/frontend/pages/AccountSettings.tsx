@@ -137,14 +137,14 @@ export function AccountSettings(): JSX.Element {
   if (isPending) {
     return (
       <main className="app-main stack">
-        <p className="ds-meta">Loading…</p>
+        <p className="ds-empty">Loading…</p>
       </main>
     );
   }
   if (!session) {
     return (
       <main className="app-main stack">
-        <p className="ds-meta">Sign in required.</p>
+        <p className="ds-empty">Sign in required.</p>
       </main>
     );
   }
@@ -155,8 +155,8 @@ export function AccountSettings(): JSX.Element {
   return (
     <main className="app-main stack-lg">
       <header className="stack-sm">
-        <h1>Account settings</h1>
-        <p className="ds-meta">
+        <h1 className="ds-h2">Account settings</h1>
+        <p className="ds-lede">
           {/* LEGAL-REVIEW: confirm GDPR-compliant copy for the description and the delete confirm dialog. */}
           Manage your email, password, and account status.
         </p>
