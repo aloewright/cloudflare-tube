@@ -14,6 +14,7 @@ import { commentRoutes } from './comments';
 import { csrfProtection, parseAllowedOrigins } from './csrf';
 import { likeRoutes } from './likes';
 import { securityHeaders } from './security-headers';
+import { rumRoutes } from './rum';
 import { searchRoutes } from './search';
 import { handleStreamWebhook } from './stream-webhook';
 import { subscriptionRoutes } from './subscriptions';
@@ -93,7 +94,10 @@ app.use('/api/*', async (c, next) => {
   const allowedOrigins = parseAllowedOrigins(c.env.ALLOWED_ORIGINS);
   return csrfProtection({
     allowedOrigins,
-    exemptPaths: ['/api/webhooks/*'],
+    // /api/rum is fire-and-forget telemetry; sendBeacon can omit Origin in
+    // some browsers and we'd rather lose CSRF protection there than lose
+    // visibility — the endpoint only writes Analytics Engine datapoints.
+    exemptPaths: ['/api/webhooks/*', '/api/rum'],
   })(c, next);
 });
 
@@ -119,6 +123,7 @@ app.route('/', likeRoutes);
 app.route('/', commentRoutes);
 app.route('/', analyticsRoutes);
 app.route('/', subscriptionRoutes);
+app.route('/', rumRoutes);
 
 app.get('/api/videos/trending', async (c) => {
   const parsed = trendingQuerySchema.safeParse(c.req.query());

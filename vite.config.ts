@@ -19,6 +19,9 @@ export default defineConfig({
           if (id.includes('/react/')) return 'react';
           if (id.includes('better-auth')) return 'better-auth';
           if (id.includes('@hotwired/turbo')) return 'turbo';
+          // web-vitals is only reached via the lazy import('./lib/rum'),
+          // so isolating it keeps the eager `vendor` chunk smaller.
+          if (id.includes('web-vitals')) return 'web-vitals';
           // Group long-tail node_modules together so we don't end up with
           // dozens of tiny chunks (cf. https://rolldown.rs/reference/OutputOptions).
           return 'vendor';

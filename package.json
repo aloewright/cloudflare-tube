@@ -39,6 +39,7 @@
     "react-router-dom": "^6.30.3",
     "stripe": "^14.7.0",
     "video.js": "^8.23.7",
+    "web-vitals": "^5.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
