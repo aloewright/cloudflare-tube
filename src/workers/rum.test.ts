@@ -23,7 +23,7 @@ function buildApp(): {
   const app = new Hono();
   app.route('/', rumRoutes);
   return {
-    fetch: (path, init) =>
+    fetch: async (path, init) =>
       app.fetch(new Request(`https://test.local${path}`, init), env),
     points,
   };
