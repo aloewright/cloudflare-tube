@@ -1,14 +1,26 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Watch } from './pages/Watch';
-import { Upload } from './pages/Upload';
-import { Login } from './pages/Login';
-import { Signup } from './pages/Signup';
-import { Profile } from './pages/Profile';
-import { Channel } from './pages/Channel';
-import { Search } from './pages/Search';
 import { signOut, useSession } from './lib/auth-client';
 import './styles/strand.css';
+
+// Route-level code splitting: each page (and the video.js it depends on for
+// /watch) is fetched only when navigated to. Cuts the initial JS payload on
+// the home route from ~275KB gz to the React-vendor + Home shell. See ALO-199.
+const Watch = lazy(() => import('./pages/Watch').then((m) => ({ default: m.Watch })));
+const Upload = lazy(() => import('./pages/Upload').then((m) => ({ default: m.Upload })));
+const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.Login })));
+const Signup = lazy(() => import('./pages/Signup').then((m) => ({ default: m.Signup })));
+const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
+const Channel = lazy(() => import('./pages/Channel').then((m) => ({ default: m.Channel })));
+const Search = lazy(() => import('./pages/Search').then((m) => ({ default: m.Search })));
+
+function RouteFallback(): JSX.Element {
+  return (
+    <main className="app-main stack">
+      <p className="ds-meta">Loading…</p>
+    </main>
+  );
+}
 
 type TrendingVideo = {
   id: string;
@@ -240,31 +252,33 @@ export default function App(): JSX.Element {
   return (
     <div className="app-shell">
       <AppHeader />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/watch/:id" element={<Watch />} />
-        <Route
-          path="/upload"
-          element={
-            <RequireAuth>
-              <Upload />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <RequireAuth>
-              <Profile />
-            </RequireAuth>
-          }
-        />
-        <Route path="/channel/:username" element={<Channel />} />
-        <Route path="/search" element={<Search />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/watch/:id" element={<Watch />} />
+          <Route
+            path="/upload"
+            element={
+              <RequireAuth>
+                <Upload />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <Profile />
+              </RequireAuth>
+            }
+          />
+          <Route path="/channel/:username" element={<Channel />} />
+          <Route path="/search" element={<Search />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </div>
   );
 }
