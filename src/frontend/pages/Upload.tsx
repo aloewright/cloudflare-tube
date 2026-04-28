@@ -1,7 +1,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 
 const CHUNK_SIZE = 10 * 1024 * 1024;
-const MAX_SIZE = 50 * 1024 * 1024 * 1024;
+const MAX_SIZE = 30 * 1024 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set([
   'mp4',
   'm4v',
@@ -112,7 +112,7 @@ export function Upload(): JSX.Element {
       return;
     }
     if (file.size > MAX_SIZE) {
-      setError('File exceeds 50GB max size');
+      setError('File exceeds 30GB max size');
       return;
     }
 
@@ -172,7 +172,7 @@ export function Upload(): JSX.Element {
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             required
           />
-          <span className="ds-meta">MP4, MOV, MKV, WebM, AVI, MPEG, M4V, 3GP, FLV, OGV, or TS. 50GB max.</span>
+          <span className="ds-meta">MP4, MOV, MKV, WebM, AVI, MPEG, M4V, 3GP, FLV, OGV, or TS. 30GB max.</span>
         </div>
 
         <div className="stack-sm">

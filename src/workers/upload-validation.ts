@@ -20,10 +20,12 @@ export const ALLOWED_VIDEO_MIME_TYPES = new Set<string>([
   'video/mp2t',
 ]);
 
-export const MAX_VIDEO_BYTES = 50 * 1024 * 1024 * 1024;
+// 30GB matches Cloudflare Stream's basic-ingest ceiling — videos larger than
+// this transcode-fail downstream, so the upload gate enforces the same limit.
+export const MAX_VIDEO_BYTES = 30 * 1024 * 1024 * 1024;
 export const MAX_CHUNK_BYTES = 50 * 1024 * 1024;
 // R2 multipart caps at 10,000 parts. Frontend uses 10MB chunks
-// (CHUNK_SIZE in Upload.tsx), so 50GB / 10MB = 5,120 parts — well under.
+// (CHUNK_SIZE in Upload.tsx), so 30GB / 10MB = 3,072 parts — well under.
 // Keep this calculation in sync with CHUNK_SIZE on the frontend.
 export const MAX_CHUNK_COUNT = Math.ceil(MAX_VIDEO_BYTES / (10 * 1024 * 1024));
 
