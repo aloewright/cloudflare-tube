@@ -17,7 +17,10 @@ async function uploadInChunks(
   for (let index = 0; index < chunkCount; index += 1) {
     const start = index * CHUNK_SIZE;
     const end = Math.min(start + CHUNK_SIZE, file.size);
-    const chunk = file.slice(start, end);
+    // Pass file.type so the resulting Blob keeps the parent's MIME — without it
+    // the chunk's type is '' and the multipart part is sent as
+    // application/octet-stream, which the upload validator then rejects.
+    const chunk = file.slice(start, end, file.type);
     const formData = new FormData();
     formData.set('title', title);
     formData.set('description', description);
