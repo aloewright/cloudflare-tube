@@ -2,7 +2,27 @@ import { FormEvent, useMemo, useState } from 'react';
 
 const CHUNK_SIZE = 5 * 1024 * 1024;
 const MAX_SIZE = 5 * 1024 * 1024 * 1024;
-const ALLOWED_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska']);
+const ALLOWED_EXTENSIONS = new Set([
+  'mp4',
+  'm4v',
+  'webm',
+  'mov',
+  'mkv',
+  'avi',
+  'mpeg',
+  'mpg',
+  'ogv',
+  '3gp',
+  'flv',
+  'ts',
+]);
+
+function isAcceptedVideo(file: File): boolean {
+  if (file.type && file.type.startsWith('video/')) return true;
+  const dot = file.name.lastIndexOf('.');
+  if (dot < 0) return false;
+  return ALLOWED_EXTENSIONS.has(file.name.slice(dot + 1).toLowerCase());
+}
 
 async function uploadInChunks(
   file: File,
@@ -75,7 +95,7 @@ export function Upload(): JSX.Element {
     if (!file) {
       return false;
     }
-    return file.size <= MAX_SIZE && ALLOWED_TYPES.has(file.type);
+    return file.size <= MAX_SIZE && isAcceptedVideo(file);
   }, [file]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -87,7 +107,7 @@ export function Upload(): JSX.Element {
       setError('Please choose a file');
       return;
     }
-    if (!ALLOWED_TYPES.has(file.type)) {
+    if (!isAcceptedVideo(file)) {
       setError('Unsupported file type');
       return;
     }
@@ -152,7 +172,7 @@ export function Upload(): JSX.Element {
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             required
           />
-          <span className="ds-meta">MP4, WebM, MOV, or MKV. 5GB max.</span>
+          <span className="ds-meta">MP4, MOV, MKV, WebM, AVI, MPEG, M4V, 3GP, FLV, OGV, or TS. 5GB max.</span>
         </div>
 
         <div className="stack-sm">

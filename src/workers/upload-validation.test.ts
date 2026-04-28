@@ -15,7 +15,7 @@ describe('validateInitialFile', () => {
     ).toBeNull();
   });
 
-  it('rejects unknown mime types', () => {
+  it('rejects non-video mime types', () => {
     const result = validateInitialFile({ fileName: 'clip.mp4', mimeType: 'image/png' });
     expect(result?.code).toBe('mime_not_allowed');
   });
@@ -23,6 +23,42 @@ describe('validateInitialFile', () => {
   it('rejects mismatched extension', () => {
     const result = validateInitialFile({ fileName: 'clip.exe', mimeType: 'video/mp4' });
     expect(result?.code).toBe('extension_not_allowed');
+  });
+
+  it('accepts application/octet-stream when extension is valid', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.mp4', mimeType: 'application/octet-stream' }),
+    ).toBeNull();
+  });
+
+  it('accepts an empty MIME type when extension is valid', () => {
+    expect(validateInitialFile({ fileName: 'clip.mov', mimeType: '' })).toBeNull();
+  });
+
+  it('accepts arbitrary video/* MIME with valid extension', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.mp4', mimeType: 'video/x-some-codec' }),
+    ).toBeNull();
+  });
+
+  it('accepts common video formats by extension', () => {
+    const cases: Array<[string, string]> = [
+      ['clip.mp4', 'video/mp4'],
+      ['clip.m4v', 'video/x-m4v'],
+      ['clip.mov', 'video/quicktime'],
+      ['clip.mkv', 'video/x-matroska'],
+      ['clip.webm', 'video/webm'],
+      ['clip.avi', 'video/x-msvideo'],
+      ['clip.mpeg', 'video/mpeg'],
+      ['clip.mpg', 'video/mpeg'],
+      ['clip.3gp', 'video/3gpp'],
+      ['clip.ogv', 'video/ogg'],
+      ['clip.flv', 'video/x-flv'],
+      ['clip.ts', 'video/mp2t'],
+    ];
+    for (const [fileName, mimeType] of cases) {
+      expect(validateInitialFile({ fileName, mimeType })).toBeNull();
+    }
   });
 
   it('rejects oversized files', () => {
