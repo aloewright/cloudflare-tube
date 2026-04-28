@@ -34,7 +34,16 @@ async function uploadInChunks(
     });
 
     if (!lastResponse.ok) {
-      throw new Error('Upload failed');
+      const body = await lastResponse.text();
+      let detail = body;
+      try {
+        const parsed = JSON.parse(body) as { error?: string; code?: string };
+        detail = parsed.error ?? body;
+        if (parsed.code) detail = `${detail} (${parsed.code})`;
+      } catch {
+        // Non-JSON response — keep raw text.
+      }
+      throw new Error(`Upload failed (${lastResponse.status}): ${detail.slice(0, 300)}`);
     }
 
     const responseData = (await lastResponse.json()) as { uploadId?: string };

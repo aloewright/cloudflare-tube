@@ -25,6 +25,7 @@ import { thumbnailRoutes } from './thumbnails';
 import { userRoutes } from './users';
 import {
   MAX_VIDEO_BYTES,
+  parseChunkMetadataFromFormData,
   validateChunkShape,
   validateInitialFile,
 } from './upload-validation';
@@ -301,17 +302,7 @@ app.post('/api/videos/upload', async (c) => {
     return c.json({ error: 'File is required' }, 400);
   }
 
-  const chunkSchema = z.object({
-    uploadId: z.string().optional(),
-    chunkIndex: z.coerce.number().int().min(0).default(0),
-    chunkCount: z.coerce.number().int().positive().default(1),
-  });
-
-  const chunkParsed = chunkSchema.safeParse({
-    uploadId: formData.get('uploadId'),
-    chunkIndex: formData.get('chunkIndex') ?? '0',
-    chunkCount: formData.get('chunkCount') ?? '1',
-  });
+  const chunkParsed = parseChunkMetadataFromFormData(formData);
 
   if (!chunkParsed.success) {
     return c.json({ error: 'Invalid chunk metadata', details: chunkParsed.error.flatten() }, 400);

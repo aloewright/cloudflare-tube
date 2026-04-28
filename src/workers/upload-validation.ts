@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export const ALLOWED_VIDEO_MIME_TYPES = new Set<string>([
   'video/mp4',
   'video/webm',
@@ -58,6 +60,32 @@ export function validateChunkShape(params: {
     };
   }
   return null;
+}
+
+const chunkMetadataSchema = z.object({
+  uploadId: z.string().optional(),
+  chunkIndex: z.coerce.number().int().min(0).default(0),
+  chunkCount: z.coerce.number().int().positive().default(1),
+});
+
+export type ChunkMetadata = z.infer<typeof chunkMetadataSchema>;
+
+export type ChunkMetadataParseResult =
+  | { success: true; data: ChunkMetadata }
+  | { success: false; error: z.ZodError };
+
+// FormData.get returns `null` for missing keys; zod's .optional() only accepts
+// `undefined`. This wrapper bridges that gap so single-chunk uploads (which
+// omit uploadId) parse correctly. Regression coverage in upload-validation.test.ts.
+export function parseChunkMetadataFromFormData(formData: FormData): ChunkMetadataParseResult {
+  const result = chunkMetadataSchema.safeParse({
+    uploadId: formData.get('uploadId') ?? undefined,
+    chunkIndex: formData.get('chunkIndex') ?? '0',
+    chunkCount: formData.get('chunkCount') ?? '1',
+  });
+  return result.success
+    ? { success: true, data: result.data }
+    : { success: false, error: result.error };
 }
 
 export function validateInitialFile(params: {

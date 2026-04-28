@@ -3,6 +3,7 @@ import {
   MAX_CHUNK_BYTES,
   MAX_CHUNK_COUNT,
   MAX_VIDEO_BYTES,
+  parseChunkMetadataFromFormData,
   validateChunkShape,
   validateInitialFile,
 } from './upload-validation';
@@ -79,5 +80,67 @@ describe('validateChunkShape', () => {
     expect(
       validateChunkShape({ chunkSize: 1024, chunkIndex: 5, chunkCount: 3 })?.code,
     ).toBe('chunk_index_out_of_range');
+  });
+});
+
+describe('parseChunkMetadataFromFormData', () => {
+  // Regression: FormData.get returns null for absent keys; zod's .optional()
+  // only accepts undefined, so a missing uploadId used to 400 every
+  // single-chunk upload (the frontend never sets uploadId on chunk 0).
+  it('accepts a single-chunk form with no uploadId field', () => {
+    const fd = new FormData();
+    fd.set('chunkIndex', '0');
+    fd.set('chunkCount', '1');
+
+    const result = parseChunkMetadataFromFormData(fd);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.uploadId).toBeUndefined();
+      expect(result.data.chunkIndex).toBe(0);
+      expect(result.data.chunkCount).toBe(1);
+    }
+  });
+
+  it('accepts an empty form (defaults to single-chunk)', () => {
+    const result = parseChunkMetadataFromFormData(new FormData());
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.chunkIndex).toBe(0);
+      expect(result.data.chunkCount).toBe(1);
+    }
+  });
+
+  it('preserves an explicit uploadId', () => {
+    const fd = new FormData();
+    fd.set('uploadId', 'abc-123');
+    fd.set('chunkIndex', '2');
+    fd.set('chunkCount', '5');
+
+    const result = parseChunkMetadataFromFormData(fd);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.uploadId).toBe('abc-123');
+      expect(result.data.chunkIndex).toBe(2);
+      expect(result.data.chunkCount).toBe(5);
+    }
+  });
+
+  it('rejects a negative chunkIndex', () => {
+    const fd = new FormData();
+    fd.set('chunkIndex', '-1');
+    fd.set('chunkCount', '1');
+
+    expect(parseChunkMetadataFromFormData(fd).success).toBe(false);
+  });
+
+  it('rejects a non-positive chunkCount', () => {
+    const fd = new FormData();
+    fd.set('chunkIndex', '0');
+    fd.set('chunkCount', '0');
+
+    expect(parseChunkMetadataFromFormData(fd).success).toBe(false);
   });
 });
