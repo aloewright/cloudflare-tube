@@ -9,6 +9,7 @@ import {
   validateInitialFile,
 } from './upload-validation';
 import { VIDEO_META_CACHE_TTL_SECONDS, videoMetaCacheKey } from './video-meta-cache';
+import { parseRangeHeader } from './video-range';
 
 interface AnalyticsEngineDataset {
   writeDataPoint(point: { blobs?: string[]; doubles?: number[]; indexes?: string[] }): void;
@@ -202,6 +203,92 @@ videoRoutes.get('/api/videos/:id', async (c) => {
   return c.json({
     ...video,
     view_count: viewCount,
+  });
+});
+
+// Direct R2 playback for videos that haven't been transcoded by Cloudflare
+// Stream (e.g. Stream isn't enabled, or the video is still encoding). Browsers
+// require Range support for seekable <video> playback. When stream_video_id is
+// present and status='ready', clients should use the HLS manifest instead.
+videoRoutes.on(['GET', 'HEAD'], '/api/videos/:id/stream', async (c) => {
+  const id = c.req.param('id');
+  const video = await c.env.DB.prepare(
+    `SELECT user_id, r2_key, hidden_at, dmca_status
+     FROM videos
+     WHERE id = ? AND deleted_at IS NULL`,
+  )
+    .bind(id)
+    .first<{
+      user_id: string;
+      r2_key: string;
+      hidden_at: string | null;
+      dmca_status: string | null;
+    }>();
+
+  if (!video) return c.json({ error: 'Video not found' }, 404);
+  if (video.dmca_status === 'disabled') {
+    return c.json({ error: 'Unavailable for legal reasons', dmca: true }, 451);
+  }
+
+  const user = c.get('user');
+  if (video.hidden_at && video.user_id !== user?.id) {
+    return c.json({ error: 'Video not found' }, 404);
+  }
+
+  const head = await c.env.VIDEOS.head(video.r2_key);
+  if (!head) return c.json({ error: 'Video object missing' }, 404);
+
+  const totalSize = head.size;
+  const contentType = head.httpMetadata?.contentType ?? 'video/mp4';
+  const range = parseRangeHeader(c.req.header('Range'), totalSize);
+
+  if (range.kind === 'invalid') {
+    return new Response('Range Not Satisfiable', {
+      status: 416,
+      headers: { 'Content-Range': `bytes */${totalSize}` },
+    });
+  }
+
+  if (c.req.method === 'HEAD') {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Length': String(totalSize),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  }
+
+  if (range.kind === 'absent') {
+    const object = await c.env.VIDEOS.get(video.r2_key);
+    if (!object) return c.json({ error: 'Video object missing' }, 404);
+    return new Response(object.body, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Length': String(totalSize),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  }
+
+  const object = await c.env.VIDEOS.get(video.r2_key, {
+    range: { offset: range.offset, length: range.length },
+  });
+  if (!object) return c.json({ error: 'Video object missing' }, 404);
+
+  return new Response(object.body, {
+    status: 206,
+    headers: {
+      'Content-Type': contentType,
+      'Content-Length': String(range.length),
+      'Content-Range': `bytes ${range.start}-${range.end}/${totalSize}`,
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=3600',
+    },
   });
 });
 

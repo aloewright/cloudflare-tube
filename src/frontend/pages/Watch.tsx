@@ -15,7 +15,11 @@ type VideoResponse = {
   channel_name?: string;
   channel_username?: string | null;
   stream_video_id?: string;
+  r2_key?: string;
+  status?: string;
 };
+
+type PlaybackSource = { src: string; type: string } | null;
 
 export function Watch(): JSX.Element {
   const { id } = useParams<{ id: string }>();
@@ -31,12 +35,25 @@ export function Watch(): JSX.Element {
   const videoEl = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<Player | null>(null);
 
-  const playbackUrl = useMemo(() => {
-    if (!video?.stream_video_id) {
-      return '';
+  const playbackSource: PlaybackSource = useMemo(() => {
+    if (!video) return null;
+    // Use Stream HLS only when transcoding is finished — until then the
+    // manifest 404s. R2 fallback covers the in-between states (uploaded,
+    // pending_encode, encoding, stream_submitted) and the case where Stream
+    // isn't configured at all.
+    if (video.stream_video_id && video.status === 'ready') {
+      return {
+        src: `https://videodelivery.net/${video.stream_video_id}/manifest/video.m3u8`,
+        type: 'application/x-mpegURL',
+      };
     }
-    return `https://videodelivery.net/${video.stream_video_id}/manifest/video.m3u8`;
-  }, [video?.stream_video_id]);
+    if (video.r2_key) {
+      // Direct R2 playback. Only browser-playable formats (MP4/H.264, WebM)
+      // will work here; other containers need Stream to transcode first.
+      return { src: `/api/videos/${encodeURIComponent(video.id)}/stream`, type: 'video/mp4' };
+    }
+    return null;
+  }, [video]);
 
   useEffect(() => {
     if (!id) {
@@ -143,7 +160,7 @@ export function Watch(): JSX.Element {
   }, [id, likeBusy, session]);
 
   useEffect(() => {
-    if (!videoEl.current || !playbackUrl) {
+    if (!videoEl.current || !playbackSource) {
       return;
     }
 
@@ -151,14 +168,14 @@ export function Watch(): JSX.Element {
     playerRef.current = videojs(videoEl.current, {
       controls: true,
       fluid: true,
-      sources: [{ src: playbackUrl, type: 'application/x-mpegURL' }],
+      sources: [playbackSource],
     });
 
     return () => {
       playerRef.current?.dispose();
       playerRef.current = null;
     };
-  }, [playbackUrl]);
+  }, [playbackSource]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -196,7 +213,7 @@ export function Watch(): JSX.Element {
       ping();
       player.off('play', onPlay);
     };
-  }, [id, playbackUrl]);
+  }, [id, playbackSource]);
 
   if (error) {
     return (
