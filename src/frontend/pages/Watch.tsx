@@ -196,6 +196,9 @@ export function Watch(): JSX.Element {
       }
     };
     player.on('loadedmetadata', onLoaded);
+    if (player.readyState() >= 1) {
+      onLoaded();
+    }
     return () => {
       player.off('loadedmetadata', onLoaded);
     };
