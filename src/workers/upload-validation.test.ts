@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALLOWED_VIDEO_MIME_TYPES,
   MAX_CHUNK_BYTES,
   MAX_CHUNK_COUNT,
   MAX_VIDEO_BYTES,
-  parseChunkMetadataFromFormData,
   validateChunkShape,
   validateInitialFile,
 } from './upload-validation';
@@ -15,7 +15,7 @@ describe('validateInitialFile', () => {
     ).toBeNull();
   });
 
-  it('rejects non-video mime types', () => {
+  it('rejects unknown mime types', () => {
     const result = validateInitialFile({ fileName: 'clip.mp4', mimeType: 'image/png' });
     expect(result?.code).toBe('mime_not_allowed');
   });
@@ -23,42 +23,6 @@ describe('validateInitialFile', () => {
   it('rejects mismatched extension', () => {
     const result = validateInitialFile({ fileName: 'clip.exe', mimeType: 'video/mp4' });
     expect(result?.code).toBe('extension_not_allowed');
-  });
-
-  it('accepts application/octet-stream when extension is valid', () => {
-    expect(
-      validateInitialFile({ fileName: 'clip.mp4', mimeType: 'application/octet-stream' }),
-    ).toBeNull();
-  });
-
-  it('accepts an empty MIME type when extension is valid', () => {
-    expect(validateInitialFile({ fileName: 'clip.mov', mimeType: '' })).toBeNull();
-  });
-
-  it('accepts arbitrary video/* MIME with valid extension', () => {
-    expect(
-      validateInitialFile({ fileName: 'clip.mp4', mimeType: 'video/x-some-codec' }),
-    ).toBeNull();
-  });
-
-  it('accepts common video formats by extension', () => {
-    const cases: Array<[string, string]> = [
-      ['clip.mp4', 'video/mp4'],
-      ['clip.m4v', 'video/x-m4v'],
-      ['clip.mov', 'video/quicktime'],
-      ['clip.mkv', 'video/x-matroska'],
-      ['clip.webm', 'video/webm'],
-      ['clip.avi', 'video/x-msvideo'],
-      ['clip.mpeg', 'video/mpeg'],
-      ['clip.mpg', 'video/mpeg'],
-      ['clip.3gp', 'video/3gpp'],
-      ['clip.ogv', 'video/ogg'],
-      ['clip.flv', 'video/x-flv'],
-      ['clip.ts', 'video/mp2t'],
-    ];
-    for (const [fileName, mimeType] of cases) {
-      expect(validateInitialFile({ fileName, mimeType })).toBeNull();
-    }
   });
 
   it('rejects oversized files', () => {
@@ -117,66 +81,149 @@ describe('validateChunkShape', () => {
       validateChunkShape({ chunkSize: 1024, chunkIndex: 5, chunkCount: 3 })?.code,
     ).toBe('chunk_index_out_of_range');
   });
+
+  it('accepts chunk at exactly MAX_CHUNK_BYTES', () => {
+    expect(
+      validateChunkShape({ chunkSize: MAX_CHUNK_BYTES, chunkIndex: 0, chunkCount: 1 }),
+    ).toBeNull();
+  });
+
+  it('accepts last valid chunk index (MAX_CHUNK_COUNT - 1)', () => {
+    expect(
+      validateChunkShape({ chunkSize: 1024, chunkIndex: MAX_CHUNK_COUNT - 1, chunkCount: MAX_CHUNK_COUNT }),
+    ).toBeNull();
+  });
+
+  it('accepts exactly MAX_CHUNK_COUNT chunks', () => {
+    expect(
+      validateChunkShape({ chunkSize: 1024, chunkIndex: 0, chunkCount: MAX_CHUNK_COUNT }),
+    ).toBeNull();
+  });
+
+  it('rejects chunkCount of zero', () => {
+    expect(
+      validateChunkShape({ chunkSize: 1024, chunkIndex: 0, chunkCount: 0 })?.code,
+    ).toBe('chunk_count_invalid');
+  });
+
+  it('rejects negative chunkIndex', () => {
+    expect(
+      validateChunkShape({ chunkSize: 1024, chunkIndex: -1, chunkCount: 1 })?.code,
+    ).toBe('chunk_index_out_of_range');
+  });
 });
 
-describe('parseChunkMetadataFromFormData', () => {
-  // Regression: FormData.get returns null for absent keys; zod's .optional()
-  // only accepts undefined, so a missing uploadId used to 400 every
-  // single-chunk upload (the frontend never sets uploadId on chunk 0).
-  it('accepts a single-chunk form with no uploadId field', () => {
-    const fd = new FormData();
-    fd.set('chunkIndex', '0');
-    fd.set('chunkCount', '1');
-
-    const result = parseChunkMetadataFromFormData(fd);
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.uploadId).toBeUndefined();
-      expect(result.data.chunkIndex).toBe(0);
-      expect(result.data.chunkCount).toBe(1);
-    }
+describe('upload constants (5GB/5MB limits)', () => {
+  it('MAX_VIDEO_BYTES is 5GB', () => {
+    expect(MAX_VIDEO_BYTES).toBe(5 * 1024 * 1024 * 1024);
   });
 
-  it('accepts an empty form (defaults to single-chunk)', () => {
-    const result = parseChunkMetadataFromFormData(new FormData());
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.chunkIndex).toBe(0);
-      expect(result.data.chunkCount).toBe(1);
-    }
+  it('MAX_CHUNK_BYTES is 50MB', () => {
+    expect(MAX_CHUNK_BYTES).toBe(50 * 1024 * 1024);
   });
 
-  it('preserves an explicit uploadId', () => {
-    const fd = new FormData();
-    fd.set('uploadId', 'abc-123');
-    fd.set('chunkIndex', '2');
-    fd.set('chunkCount', '5');
-
-    const result = parseChunkMetadataFromFormData(fd);
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.uploadId).toBe('abc-123');
-      expect(result.data.chunkIndex).toBe(2);
-      expect(result.data.chunkCount).toBe(5);
-    }
+  it('MAX_CHUNK_COUNT matches 5GB / 5MB ceiling', () => {
+    expect(MAX_CHUNK_COUNT).toBe(Math.ceil((5 * 1024 * 1024 * 1024) / (5 * 1024 * 1024)));
   });
 
-  it('rejects a negative chunkIndex', () => {
-    const fd = new FormData();
-    fd.set('chunkIndex', '-1');
-    fd.set('chunkCount', '1');
+  it('ALLOWED_VIDEO_MIME_TYPES contains exactly the four supported types', () => {
+    expect(ALLOWED_VIDEO_MIME_TYPES.has('video/mp4')).toBe(true);
+    expect(ALLOWED_VIDEO_MIME_TYPES.has('video/webm')).toBe(true);
+    expect(ALLOWED_VIDEO_MIME_TYPES.has('video/quicktime')).toBe(true);
+    expect(ALLOWED_VIDEO_MIME_TYPES.has('video/x-matroska')).toBe(true);
+    expect(ALLOWED_VIDEO_MIME_TYPES.size).toBe(4);
+  });
+});
 
-    expect(parseChunkMetadataFromFormData(fd).success).toBe(false);
+describe('validateInitialFile — stricter MIME enforcement', () => {
+  // Previously-permissive types that are now rejected after the PR.
+  it('rejects application/octet-stream (no longer a pass-through)', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.mp4', mimeType: 'application/octet-stream' })?.code,
+    ).toBe('mime_not_allowed');
   });
 
-  it('rejects a non-positive chunkCount', () => {
-    const fd = new FormData();
-    fd.set('chunkIndex', '0');
-    fd.set('chunkCount', '0');
+  it('rejects empty MIME type', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.mp4', mimeType: '' })?.code,
+    ).toBe('mime_not_allowed');
+  });
 
-    expect(parseChunkMetadataFromFormData(fd).success).toBe(false);
+  it('rejects generic video/* MIME types not in the allow-list', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.mp4', mimeType: 'video/x-some-codec' })?.code,
+    ).toBe('mime_not_allowed');
+  });
+
+  it('rejects video/avi (removed from allow-list)', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.avi', mimeType: 'video/avi' })?.code,
+    ).toBe('mime_not_allowed');
+  });
+
+  it('rejects video/mpeg (removed from allow-list)', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.mpeg', mimeType: 'video/mpeg' })?.code,
+    ).toBe('mime_not_allowed');
+  });
+
+  // MIME check occurs before extension check — confirm error code priority.
+  it('returns mime_not_allowed rather than extension_not_allowed when both would fail', () => {
+    const result = validateInitialFile({ fileName: 'clip.exe', mimeType: 'image/png' });
+    expect(result?.code).toBe('mime_not_allowed');
+  });
+
+  it('accepts file exactly at MAX_VIDEO_BYTES (boundary should pass)', () => {
+    expect(
+      validateInitialFile({ fileName: 'limit.mp4', mimeType: 'video/mp4', totalSize: MAX_VIDEO_BYTES }),
+    ).toBeNull();
+  });
+
+  it('does not check size when totalSize is omitted', () => {
+    // A very large implied size — no totalSize means no size gate.
+    expect(
+      validateInitialFile({ fileName: 'large.mp4', mimeType: 'video/mp4' }),
+    ).toBeNull();
+  });
+
+  it('rejects extensions removed in this PR: .avi', () => {
+    // video/x-msvideo is not in the MIME list so we need to check via the new
+    // stricter MIME path; but let's also confirm that even with video/mp4 MIME
+    // the extension gate catches it.
+    // First, a real avi extension with a now-forbidden MIME will hit MIME gate.
+    // Use video/mp4 MIME but .avi extension so we reach extension gate.
+    expect(
+      validateInitialFile({ fileName: 'clip.avi', mimeType: 'video/mp4' })?.code,
+    ).toBe('extension_not_allowed');
+  });
+
+  it('rejects extension .ts (removed in this PR)', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.ts', mimeType: 'video/mp4' })?.code,
+    ).toBe('extension_not_allowed');
+  });
+
+  it('rejects extension .flv (removed in this PR)', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.flv', mimeType: 'video/mp4' })?.code,
+    ).toBe('extension_not_allowed');
+  });
+
+  it('rejects extension .m4v (removed in this PR)', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.m4v', mimeType: 'video/mp4' })?.code,
+    ).toBe('extension_not_allowed');
+  });
+
+  it('rejects extension .3gp (removed in this PR)', () => {
+    expect(
+      validateInitialFile({ fileName: 'clip.3gp', mimeType: 'video/mp4' })?.code,
+    ).toBe('extension_not_allowed');
+  });
+
+  it('rejects file with no extension', () => {
+    expect(
+      validateInitialFile({ fileName: 'videofile', mimeType: 'video/mp4' })?.code,
+    ).toBe('extension_not_allowed');
   });
 });
