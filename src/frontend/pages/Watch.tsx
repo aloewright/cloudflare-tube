@@ -210,10 +210,11 @@ export function Watch(): JSX.Element {
     const player = playerRef.current;
     if (!id || !player) return;
 
+    const p0 = player; // captured; survives playerRef being nulled on dispose
     const persist = (): void => {
-      const p = playerRef.current;
-      if (!p) return;
-      const t = typeof p.currentTime === 'function' ? p.currentTime() ?? 0 : 0;
+      const p = playerRef.current ?? p0;
+      if (!p || typeof p.currentTime !== 'function') return;
+      const t = p.currentTime() ?? 0;
       saveStoredPosition(id, t, window.localStorage);
     };
     const tick = (): void => {
@@ -228,11 +229,13 @@ export function Watch(): JSX.Element {
     const interval = window.setInterval(tick, POSITION_SAVE_INTERVAL_MS);
     player.on('pause', persist);
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', persist);
     return () => {
       window.clearInterval(interval);
       persist();
       player.off('pause', persist);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', persist);
     };
   }, [id, playbackUrl]);
 
