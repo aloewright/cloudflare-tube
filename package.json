@@ -31,6 +31,8 @@
     "@cloudflare/kumo": "^1.16.0",
     "@cloudflare/workers-types": "^4.20240221.1",
     "@hotwired/turbo": "^8.0.23",
+    "@sentry/cloudflare": "^10.50.0",
+    "@sentry/react": "^10.50.0",
     "better-auth": "^1.6.9",
     "hono": "^4.12.9",
     "jose": "^6.2.2",

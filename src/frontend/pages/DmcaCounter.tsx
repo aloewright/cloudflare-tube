@@ -48,18 +48,18 @@ export function DmcaCounter(): JSX.Element {
     }
   };
 
-  if (isPending) return <main className="app-main stack"><p className="ds-meta">Loading…</p></main>;
+  if (isPending) return <main className="app-main stack"><p className="ds-empty">Loading…</p></main>;
   if (!session) {
     return (
       <main className="app-main stack">
-        <p className="ds-meta">Sign in required to submit a counter-notice.</p>
+        <p className="ds-empty">Sign in required to submit a counter-notice.</p>
       </main>
     );
   }
   if (submittedId) {
     return (
       <main className="app-main stack-lg">
-        <h1>Counter-notice received</h1>
+        <h1 className="ds-h2">Counter-notice received</h1>
         {/* LEGAL-REVIEW: confirm 10-14 business day waiting language. */}
         <p className="ds-meta">
           Reference: <code>{submittedId}</code>. Your video will be restored after the statutory waiting period if no
@@ -72,9 +72,9 @@ export function DmcaCounter(): JSX.Element {
   return (
     <main className="app-main stack-lg">
       <header className="stack-sm">
-        <h1>DMCA counter-notice</h1>
+        <h1 className="ds-h2">DMCA counter-notice</h1>
         {/* LEGAL-REVIEW: § 512(g) — counter-notification copy. */}
-        <p className="ds-meta">
+        <p className="ds-lede">
           File this if you believe your video was disabled in error. False statements may carry legal consequences.
         </p>
       </header>

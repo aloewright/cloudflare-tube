@@ -103,7 +103,7 @@ export function AdminModeration(): JSX.Element {
   if (isPending) {
     return (
       <main className="app-main stack">
-        <p className="ds-meta">Loading…</p>
+        <p className="ds-empty">Loading…</p>
       </main>
     );
   }
@@ -111,7 +111,7 @@ export function AdminModeration(): JSX.Element {
   if (!session) {
     return (
       <main className="app-main stack">
-        <p className="ds-meta">Sign in required.</p>
+        <p className="ds-empty">Sign in required.</p>
       </main>
     );
   }
@@ -119,8 +119,8 @@ export function AdminModeration(): JSX.Element {
   return (
     <main className="app-main stack-lg">
       <header className="stack-sm">
-        <h1>Moderation queue</h1>
-        <p className="ds-meta">Internal admin tool. Decisions are audit-logged.</p>
+        <h1 className="ds-h2">Moderation queue</h1>
+        <p className="ds-lede">Internal admin tool. Decisions are audit-logged.</p>
       </header>
 
       <section className="stack-sm">
@@ -161,9 +161,9 @@ export function AdminModeration(): JSX.Element {
       {error && <p className="status-error">{error}</p>}
 
       {reports === null ? (
-        <p className="ds-meta">Loading reports…</p>
+        <p className="ds-empty">Loading reports…</p>
       ) : reports.length === 0 ? (
-        <p className="ds-meta">No reports for this filter.</p>
+        <p className="ds-empty">No reports for this filter.</p>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>

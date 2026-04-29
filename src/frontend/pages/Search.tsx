@@ -55,14 +55,13 @@ export function Search(): JSX.Element {
   return (
     <main className="app-main stack-lg fade-in">
       <header className="stack-sm">
-        <span className="ds-label">Search</span>
-        <h1 style={{ margin: 0 }}>{q ? `Results for “${q}”` : 'Type a query'}</h1>
+        <h1 className="ds-h2">{q ? `Results for “${q}”` : 'Type a query'}</h1>
       </header>
 
       {error && <p className="status-error">{error}</p>}
-      {results === null && !error && <p className="ds-meta">Searching…</p>}
+      {results === null && !error && <p className="ds-empty">Searching…</p>}
       {results !== null && results.length === 0 && q.length > 0 && (
-        <p className="ds-meta">No videos matched “{q}”.</p>
+        <p className="ds-empty">No videos matched “{q}”.</p>
       )}
 
       {results && results.length > 0 && (

@@ -62,7 +62,7 @@ export function DmcaForm(): JSX.Element {
   if (submitted) {
     return (
       <main className="app-main stack-lg">
-        <h1>DMCA notice received</h1>
+        <h1 className="ds-h2">DMCA notice received</h1>
         {/* LEGAL-REVIEW: replace placeholder confirmation copy. */}
         <p className="ds-meta">
           Reference: <code>{submitted.id}</code>. We&apos;ll email a confirmation to{' '}
@@ -75,9 +75,9 @@ export function DmcaForm(): JSX.Element {
   return (
     <main className="app-main stack-lg">
       <header className="stack-sm">
-        <h1>DMCA copyright notice</h1>
+        <h1 className="ds-h2">DMCA copyright notice</h1>
         {/* LEGAL-REVIEW: must match 17 U.S.C. § 512(c)(3) requirements before launch. */}
-        <p className="ds-meta">
+        <p className="ds-lede">
           Use this form to report copyright infringement. Submitting a false claim may carry legal consequences.
         </p>
       </header>

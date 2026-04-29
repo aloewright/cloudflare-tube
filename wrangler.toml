@@ -37,12 +37,8 @@ id = "0b560dd1327445bd8b5eb6efca3e82e0"
 binding = "VIDEO_ENCODING"
 queue = "video-encoding"
 
-[[queues.consumers]]
-queue = "video-encoding"
-max_batch_size = 10
-max_batch_timeout = 30
-max_retries = 3
-dead_letter_queue = "video-encoding-dlq"
+# Consumer is registered server-side; wrangler errors if re-declared on deploy.
+# To change batch size / DLQ, edit via the Cloudflare dashboard or `wrangler queues consumer`.
 
 # Analytics Engine — view + watch-time datapoints (ALO-144)
 [[analytics_engine_datasets]]
@@ -81,3 +77,7 @@ ADMIN_EMAILS = "aloewright@gmail.com"
 # STREAM_ENABLED          (set to "true" to route uploads through Cloudflare Stream)
 # STRIPE_SECRET_KEY
 # STRIPE_WEBHOOK_SECRET
+# SENTRY_DSN              (worker error tracking — get from sentry.io project settings)
+#
+# Frontend env vars (set in .env.production or CI):
+# VITE_SENTRY_DSN         (same DSN — Vite exposes this to the browser bundle)

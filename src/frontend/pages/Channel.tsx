@@ -139,7 +139,7 @@ export function Channel(): JSX.Element {
   if (loading && !header) {
     return (
       <main className="app-main stack">
-        <p className="ds-meta">Loading…</p>
+        <p className="ds-empty">Loading…</p>
       </main>
     );
   }
@@ -237,9 +237,9 @@ export function Channel(): JSX.Element {
       {header.bio ? <p style={{ maxWidth: 720 }}>{header.bio}</p> : null}
 
       <section className="stack-sm" aria-label="Videos">
-        <span className="ds-label">Videos</span>
+        <h2 className="ds-h3">Videos</h2>
         {videos.length === 0 ? (
-          <p className="ds-meta">No videos yet.</p>
+          <p className="ds-empty">No videos yet.</p>
         ) : (
           <div
             style={{

@@ -22,6 +22,10 @@ export function createAuth(env: AuthEnv) {
       updateAge: 60 * 60 * 24,
       cookieCache: { enabled: true, maxAge: 60 * 5 },
     },
-    trustedOrigins: ['http://localhost:5173'],
+    trustedOrigins: [
+      'http://localhost:5173',
+      'https://spooool.com',
+      'https://spooool.workers.dev',
+    ],
   });
 }

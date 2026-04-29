@@ -1,8 +1,28 @@
 import { FormEvent, useMemo, useState } from 'react';
 
-const CHUNK_SIZE = 5 * 1024 * 1024;
-const MAX_SIZE = 5 * 1024 * 1024 * 1024;
-const ALLOWED_TYPES = new Set(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska']);
+const CHUNK_SIZE = 10 * 1024 * 1024;
+const MAX_SIZE = 30 * 1024 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = new Set([
+  'mp4',
+  'm4v',
+  'webm',
+  'mov',
+  'mkv',
+  'avi',
+  'mpeg',
+  'mpg',
+  'ogv',
+  '3gp',
+  'flv',
+  'ts',
+]);
+
+function isAcceptedVideo(file: File): boolean {
+  if (file.type && file.type.startsWith('video/')) return true;
+  const dot = file.name.lastIndexOf('.');
+  if (dot < 0) return false;
+  return ALLOWED_EXTENSIONS.has(file.name.slice(dot + 1).toLowerCase());
+}
 
 async function uploadInChunks(
   file: File,
@@ -17,7 +37,10 @@ async function uploadInChunks(
   for (let index = 0; index < chunkCount; index += 1) {
     const start = index * CHUNK_SIZE;
     const end = Math.min(start + CHUNK_SIZE, file.size);
-    const chunk = file.slice(start, end);
+    // Pass file.type so the resulting Blob keeps the parent's MIME — without it
+    // the chunk's type is '' and the multipart part is sent as
+    // application/octet-stream, which the upload validator then rejects.
+    const chunk = file.slice(start, end, file.type);
     const formData = new FormData();
     formData.set('title', title);
     formData.set('description', description);
@@ -34,7 +57,16 @@ async function uploadInChunks(
     });
 
     if (!lastResponse.ok) {
-      throw new Error('Upload failed');
+      const body = await lastResponse.text();
+      let detail = body;
+      try {
+        const parsed = JSON.parse(body) as { error?: string; code?: string };
+        detail = parsed.error ?? body;
+        if (parsed.code) detail = `${detail} (${parsed.code})`;
+      } catch {
+        // Non-JSON response — keep raw text.
+      }
+      throw new Error(`Upload failed (${lastResponse.status}): ${detail.slice(0, 300)}`);
     }
 
     const responseData = (await lastResponse.json()) as { uploadId?: string };
@@ -63,7 +95,7 @@ export function Upload(): JSX.Element {
     if (!file) {
       return false;
     }
-    return file.size <= MAX_SIZE && ALLOWED_TYPES.has(file.type);
+    return file.size <= MAX_SIZE && isAcceptedVideo(file);
   }, [file]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -75,12 +107,12 @@ export function Upload(): JSX.Element {
       setError('Please choose a file');
       return;
     }
-    if (!ALLOWED_TYPES.has(file.type)) {
+    if (!isAcceptedVideo(file)) {
       setError('Unsupported file type');
       return;
     }
     if (file.size > MAX_SIZE) {
-      setError('File exceeds 5GB max size');
+      setError('File exceeds 30GB max size');
       return;
     }
 
@@ -140,7 +172,7 @@ export function Upload(): JSX.Element {
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             required
           />
-          <span className="ds-meta">MP4, WebM, MOV, or MKV. 5GB max.</span>
+          <span className="ds-meta">MP4, MOV, MKV, WebM, AVI, MPEG, M4V, 3GP, FLV, OGV, or TS. 30GB max.</span>
         </div>
 
         <div className="stack-sm">
