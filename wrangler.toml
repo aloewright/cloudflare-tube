@@ -64,8 +64,10 @@ crons = ["0 2 * * *"]
 # is always allowed in addition to whatever is listed here. Override per env.
 ALLOWED_ORIGINS = ""
 
-# Comma-separated list of admin emails (ALO-171). Until a real role system
-# lands, the moderation routes gate on this list. See follow-up issue.
+# Bootstrap-only admin allow-list (ALO-205). Once at least one row exists in
+# the `user_roles` table with role='admin', this var is ignored — admins are
+# managed via /api/admin/roles. Keep one trusted email here so a fresh deploy
+# always has someone who can promote the first real admin.
 ADMIN_EMAILS = "aloewright@gmail.com"
 
 # Secrets (set via: wrangler secret put <NAME>)
