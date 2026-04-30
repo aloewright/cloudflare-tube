@@ -25,6 +25,22 @@ describe('keyToPlayerAction', () => {
     expect(keyToPlayerAction({ key: 'Enter' })).toBeNull();
   });
 
+  it('maps digit keys 0–9 to seek-percent at 0%–90%', () => {
+    expect(keyToPlayerAction({ key: '0' })).toEqual({ type: 'seek-percent', percent: 0 });
+    expect(keyToPlayerAction({ key: '5' })).toEqual({ type: 'seek-percent', percent: 50 });
+    expect(keyToPlayerAction({ key: '9' })).toEqual({ type: 'seek-percent', percent: 90 });
+  });
+
+  it('does not treat numpad-style multi-char keys as digits', () => {
+    expect(keyToPlayerAction({ key: '10' })).toBeNull();
+  });
+
+  it('returns null for digit keys when typing in form fields', () => {
+    expect(
+      keyToPlayerAction({ key: '5', target: { tagName: 'INPUT' } as unknown as EventTarget }),
+    ).toBeNull();
+  });
+
   it('returns null when modifier keys are held (so browser shortcuts win)', () => {
     expect(keyToPlayerAction({ key: 'k', metaKey: true })).toBeNull();
     expect(keyToPlayerAction({ key: 'l', ctrlKey: true })).toBeNull();
