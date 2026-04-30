@@ -4,6 +4,7 @@
 export type PlayerKeyAction =
   | { type: 'toggle-play' }
   | { type: 'seek-relative'; seconds: number }
+  | { type: 'seek-percent'; percent: number }
   | { type: 'toggle-fullscreen' }
   | { type: 'toggle-mute' };
 
@@ -51,6 +52,10 @@ export function keyToPlayerAction(event: KeyEventLike): PlayerKeyAction | null {
     case 'M':
       return { type: 'toggle-mute' };
     default:
+      // ALO-212: digit keys 0..9 jump to 0%..90% of duration, like YouTube.
+      if (event.key.length === 1 && event.key >= '0' && event.key <= '9') {
+        return { type: 'seek-percent', percent: Number.parseInt(event.key, 10) * 10 };
+      }
       return null;
   }
 }

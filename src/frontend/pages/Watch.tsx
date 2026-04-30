@@ -8,12 +8,26 @@ import { Comments } from '../components/Comments';
 import { useSession } from '../lib/auth-client';
 import { keyToPlayerAction } from '../lib/player-keys';
 import {
+  clearStoredPosition,
   formatTimeParam,
   loadStoredPosition,
   parseTimeParam,
   saveStoredPosition,
   shouldResumeAt,
 } from '../lib/watch-position';
+
+// Persist tick frequency. Pause/visibility/pagehide also force a save.
+const POSITION_SAVE_INTERVAL_MS = 5000;
+
+function formatHms(total: number): string {
+  const t = Math.max(0, Math.floor(total));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+  const mm = String(m).padStart(h > 0 ? 2 : 1, '0');
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
 
 type VideoResponse = {
   id: string;
@@ -42,8 +56,20 @@ export function Watch(): JSX.Element {
   const [subBusy, setSubBusy] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  // ALO-213: surface stored resume position so the viewer can override it.
+  // null = nothing to resume; number = seconds we'd resume at.
+  const [resumeOffer, setResumeOffer] = useState<number | null>(null);
   const videoEl = useRef<HTMLVideoElement | null>(null);
   const playerRef = useRef<Player | null>(null);
+
+  // ALO-147: ?t= deep link wins over a stored resume position.
+  const startAt = useMemo(
+    () => parseTimeParam(searchParams.get('t')),
+    [searchParams],
+  );
+  // ALO-213: explicit "Watch from start" forces a fresh play even if storage
+  // has a saved position. Persists for the lifetime of this Watch mount.
+  const watchFromStart = searchParams.get('start') === '1';
 
   const playbackSource: PlaybackSource = useMemo(() => {
     if (!video) return null;
@@ -187,8 +213,9 @@ export function Watch(): JSX.Element {
     };
   }, [playbackSource]);
 
-  // ALO-146/147: seek to ?t= when present, otherwise resume from localStorage.
-  // Runs once per loadedmetadata so we know the duration before deciding.
+  // ALO-146/147/213: seek to ?t= when present, otherwise resume from
+  // localStorage (unless ?start=1 forces a fresh play). Runs once per
+  // loadedmetadata so we know the duration before deciding.
   useEffect(() => {
     const player = playerRef.current;
     if (!id || !player) return;
@@ -200,8 +227,17 @@ export function Watch(): JSX.Element {
       if (!p) return;
       const duration = typeof p.duration === 'function' ? p.duration() ?? null : null;
       const stored = loadStoredPosition(id, window.localStorage);
-      // ?t= wins over a resume position.
-      const target = startAt != null ? startAt : shouldResumeAt(stored, duration);
+      const resumable = shouldResumeAt(stored, duration);
+      if (startAt == null && !watchFromStart && resumable != null && resumable > 0) {
+        setResumeOffer(resumable);
+      }
+      // ?t= wins; otherwise resume only when not overridden.
+      const target =
+        startAt != null
+          ? startAt
+          : watchFromStart
+            ? null
+            : resumable;
       if (target != null && target > 0) {
         const safe = duration != null && duration > 0 ? Math.min(target, duration - 1) : target;
         p.currentTime(safe);
@@ -214,7 +250,7 @@ export function Watch(): JSX.Element {
     return () => {
       player.off('loadedmetadata', onLoaded);
     };
-  }, [id, playbackUrl, startAt]);
+  }, [id, playbackSource, startAt, watchFromStart]);
 
   // ALO-146: persist position. Save while playing on a 5s tick, on pause,
   // and on tab hide (which is when most viewers vanish without "ending").
@@ -249,7 +285,7 @@ export function Watch(): JSX.Element {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', persist);
     };
-  }, [id, playbackUrl]);
+  }, [id, playbackSource]);
 
   // ALO-188: window-level keyboard shortcuts.
   useEffect(() => {
@@ -274,6 +310,15 @@ export function Watch(): JSX.Element {
           p.currentTime(next);
           return;
         }
+        case 'seek-percent': {
+          // ALO-212: digit keys jump to a fraction of duration. Skip when
+          // duration is unknown (live or pre-metadata) so we don't seek to NaN.
+          const duration = typeof p.duration === 'function' ? p.duration() ?? 0 : 0;
+          if (!Number.isFinite(duration) || duration <= 0) return;
+          const target = Math.min(duration - 1, (duration * action.percent) / 100);
+          p.currentTime(Math.max(0, target));
+          return;
+        }
         case 'toggle-fullscreen':
           if (p.isFullscreen()) {
             void p.exitFullscreen();
@@ -288,7 +333,7 @@ export function Watch(): JSX.Element {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [playbackUrl]);
+  }, [playbackSource]);
 
   useEffect(() => {
     const player = playerRef.current;
@@ -327,6 +372,18 @@ export function Watch(): JSX.Element {
       player.off('play', onPlay);
     };
   }, [id, playbackSource]);
+
+  // ALO-213: dismiss the resume banner and rewind to 0. Clears storage so
+  // the next visit doesn't re-offer the same position.
+  const startFromBeginning = useCallback((): void => {
+    if (!id) return;
+    clearStoredPosition(id, window.localStorage);
+    setResumeOffer(null);
+    const p = playerRef.current;
+    if (p && typeof p.currentTime === 'function') {
+      p.currentTime(0);
+    }
+  }, [id]);
 
   const shareAtCurrentTime = useCallback(async (): Promise<void> => {
     const p = playerRef.current;
@@ -382,6 +439,40 @@ export function Watch(): JSX.Element {
       >
         <video ref={videoEl} className="video-js vjs-big-play-centered vjs-strand" />
       </div>
+      {resumeOffer != null && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="row"
+          style={{
+            gap: 'var(--space-2)',
+            padding: 'var(--space-2) var(--space-3)',
+            border: '1px solid color-mix(in oklch, var(--border), transparent 40%)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'color-mix(in oklch, var(--accent), transparent 92%)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span className="ds-meta" style={{ flex: 1, minWidth: 0 }}>
+            Resumed at {formatHms(resumeOffer)}
+          </span>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={startFromBeginning}
+          >
+            Watch from start
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => setResumeOffer(null)}
+            aria-label="Dismiss resume banner"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <div className="stack-sm">
         <h1 className="ds-h2">{video.title}</h1>
         <div className="row">
@@ -429,7 +520,7 @@ export function Watch(): JSX.Element {
       {likeError ? <p className="status-error">{likeError}</p> : null}
       {subError ? <p className="status-error">{subError}</p> : null}
       <p className="ds-meta">
-        Shortcuts: space/k play · j/l ±10s · ←/→ ±5s · f fullscreen · m mute
+        Shortcuts: space/k play · j/l ±10s · ←/→ ±5s · 0–9 jump · f fullscreen · m mute
       </p>
       {id ? <Comments videoId={id} /> : null}
     </main>
