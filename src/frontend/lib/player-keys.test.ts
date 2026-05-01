@@ -64,4 +64,47 @@ describe('keyToPlayerAction', () => {
       keyToPlayerAction({ key: 'k', target: { tagName: 'BUTTON' } as unknown as EventTarget }),
     ).toEqual({ type: 'toggle-play' });
   });
+
+  it('maps legacy Spacebar key name to toggle-play', () => {
+    // Some older browsers emit 'Spacebar' instead of ' '.
+    expect(keyToPlayerAction({ key: 'Spacebar' })).toEqual({ type: 'toggle-play' });
+  });
+
+  it('maps uppercase J to seek-relative -10', () => {
+    expect(keyToPlayerAction({ key: 'J' })).toEqual({ type: 'seek-relative', seconds: -10 });
+  });
+
+  it('maps uppercase L to seek-relative +10', () => {
+    expect(keyToPlayerAction({ key: 'L' })).toEqual({ type: 'seek-relative', seconds: 10 });
+  });
+
+  it('maps uppercase F to toggle-fullscreen', () => {
+    expect(keyToPlayerAction({ key: 'F' })).toEqual({ type: 'toggle-fullscreen' });
+  });
+
+  it('maps uppercase M to toggle-mute', () => {
+    expect(keyToPlayerAction({ key: 'M' })).toEqual({ type: 'toggle-mute' });
+  });
+
+  it('fires when target is null (no DOM element)', () => {
+    expect(keyToPlayerAction({ key: 'k', target: null })).toEqual({ type: 'toggle-play' });
+  });
+
+  it('fires when target is undefined (missing property)', () => {
+    expect(keyToPlayerAction({ key: 'k' })).toEqual({ type: 'toggle-play' });
+  });
+
+  it('returns null for ArrowUp and ArrowDown (not mapped)', () => {
+    expect(keyToPlayerAction({ key: 'ArrowUp' })).toBeNull();
+    expect(keyToPlayerAction({ key: 'ArrowDown' })).toBeNull();
+  });
+
+  it('isContentEditable false does not suppress the action', () => {
+    expect(
+      keyToPlayerAction({
+        key: 'k',
+        target: { tagName: 'DIV', isContentEditable: false } as unknown as EventTarget,
+      }),
+    ).toEqual({ type: 'toggle-play' });
+  });
 });

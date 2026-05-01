@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  RESUME_TAIL_BUFFER_SECONDS,
   RESUME_THRESHOLD_SECONDS,
   clearStoredPosition,
   formatTimeParam,
@@ -145,5 +146,118 @@ describe('localStorage helpers', () => {
     saveStoredPosition('vid', Number.NaN, s);
     saveStoredPosition('vid', -5, s);
     expect(loadStoredPosition('vid', s)).toBeNull();
+  });
+
+  it('floors fractional positions when saving', () => {
+    const s = new MemoryStorage();
+    saveStoredPosition('vid', 42.9, s);
+    expect(loadStoredPosition('vid', s)).toBe(42);
+  });
+
+  it('clearStoredPosition is a no-op for unknown ids', () => {
+    const s = new MemoryStorage();
+    // Should not throw and storage stays empty.
+    clearStoredPosition('nonexistent', s);
+    expect(loadStoredPosition('nonexistent', s)).toBeNull();
+  });
+
+  it('overwrites an existing position for the same id', () => {
+    const s = new MemoryStorage();
+    saveStoredPosition('vid', 10, s);
+    saveStoredPosition('vid', 99, s);
+    expect(loadStoredPosition('vid', s)).toBe(99);
+  });
+
+  it('accepts position 0 as a valid save', () => {
+    const s = new MemoryStorage();
+    saveStoredPosition('vid', 0, s);
+    // 0 is valid and finite, but loadStoredPosition returns null only if entry
+    // is missing — a stored 0 should come back as 0.
+    expect(loadStoredPosition('vid', s)).toBe(0);
+  });
+
+  it('returns null when storage has valid JSON but wrong shape', () => {
+    const s = new MemoryStorage();
+    // Store a flat array instead of an object map.
+    s.setItem('spooool:watch:positions:v1', JSON.stringify([1, 2, 3]));
+    // The implementation guards with typeof === 'object', so an array
+    // would pass that check. However the entry lookup returns undefined.
+    expect(loadStoredPosition('vid', s)).toBeNull();
+  });
+});
+
+describe('shouldResumeAt — boundary conditions', () => {
+  it('RESUME_THRESHOLD_SECONDS is a positive number', () => {
+    expect(RESUME_THRESHOLD_SECONDS).toBeGreaterThan(0);
+  });
+
+  it('RESUME_TAIL_BUFFER_SECONDS is a positive number', () => {
+    expect(RESUME_TAIL_BUFFER_SECONDS).toBeGreaterThan(0);
+  });
+
+  it('returns the stored time at exactly the threshold', () => {
+    // Stored == RESUME_THRESHOLD_SECONDS should NOT be null (only < is filtered).
+    expect(shouldResumeAt(RESUME_THRESHOLD_SECONDS, 600)).toBe(RESUME_THRESHOLD_SECONDS);
+  });
+
+  it('returns null when stored is exactly duration minus tail buffer', () => {
+    const duration = 600;
+    // stored >= duration - RESUME_TAIL_BUFFER_SECONDS → null
+    expect(shouldResumeAt(duration - RESUME_TAIL_BUFFER_SECONDS, duration)).toBeNull();
+  });
+
+  it('returns stored when duration is 0 (tail buffer skipped for invalid duration)', () => {
+    // duration > 0 guard in shouldResumeAt means duration=0 skips the tail check.
+    expect(shouldResumeAt(20, 0)).toBe(20);
+  });
+
+  it('returns stored when stored is 1 second before the tail buffer', () => {
+    const duration = 600;
+    const stored = duration - RESUME_TAIL_BUFFER_SECONDS - 1;
+    expect(shouldResumeAt(stored, duration)).toBe(stored);
+  });
+});
+
+describe('parseTimeParam — additional edge cases', () => {
+  it('accepts whitespace-padded input', () => {
+    expect(parseTimeParam('  90  ')).toBe(90);
+  });
+
+  it('is case-insensitive for suffix format', () => {
+    // Implementation lowercases before matching.
+    expect(parseTimeParam('1H2M3S')).toBe(3723);
+  });
+
+  it('returns 0 for colon-form 0:00', () => {
+    expect(parseTimeParam('0:00')).toBe(0);
+  });
+
+  it('returns 0 for "0s"', () => {
+    expect(parseTimeParam('0s')).toBe(0);
+  });
+
+  it('returns null for colon form with three colons (too many segments)', () => {
+    // regex only allows 1 or 2 colons: \d+(:\d+){1,2}
+    expect(parseTimeParam('1:2:3:4')).toBeNull();
+  });
+});
+
+describe('formatTimeParam — additional edge cases', () => {
+  it('formats a single second as "1s"', () => {
+    expect(formatTimeParam(1)).toBe('1s');
+  });
+
+  it('formats 3599 as "59m59s"', () => {
+    expect(formatTimeParam(3599)).toBe('59m59s');
+  });
+
+  it('formats 0 as "0s"', () => {
+    expect(formatTimeParam(0)).toBe('0s');
+  });
+
+  it('is consistent across a large value (24h)', () => {
+    const secondsIn24h = 86400;
+    expect(formatTimeParam(secondsIn24h)).toBe('24h');
+    expect(parseTimeParam(formatTimeParam(secondsIn24h))).toBe(secondsIn24h);
   });
 });
