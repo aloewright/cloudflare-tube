@@ -11,10 +11,12 @@ import { commentRoutes } from './comments';
 import { csrfProtection, parseAllowedOrigins } from './csrf';
 import { likeRoutes } from './likes';
 import { moderationRoutes } from './moderation';
+import { oembedRoutes } from './oembed';
 import { rolesRoutes } from './roles';
 import { securityHeaders } from './security-headers';
 import { rumRoutes } from './rum';
 import { searchRoutes } from './search';
+import { seoRoutes } from './seo';
 import { handleStreamWebhook } from './stream-webhook';
 import { subscriptionRoutes } from './subscriptions';
 import { thumbnailRoutes } from './thumbnails';
@@ -93,6 +95,8 @@ app.route('/', rolesRoutes);
 app.route('/', accountRoutes);
 app.route('/', dmcaRoutes);
 app.route('/', videoRoutes);
+app.route('/', seoRoutes);
+app.route('/', oembedRoutes);
 
 export { ChannelSubscriberDO };
 

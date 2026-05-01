@@ -1,0 +1,166 @@
+import { describe, expect, it } from 'vitest';
+import {
+  escapeXml,
+  renderRobotsTxt,
+  renderSitemap,
+  seoRoutes,
+  toW3CDate,
+  type SeoEnv,
+} from './seo';
+
+describe('renderRobotsTxt', () => {
+  it('disallows /admin and /api/, exposes the sitemap', () => {
+    const out = renderRobotsTxt('https://spooool.com');
+    expect(out).toContain('User-agent: *');
+    expect(out).toContain('Disallow: /admin');
+    expect(out).toContain('Disallow: /api/');
+    expect(out).toContain('Allow: /');
+    expect(out).toContain('Sitemap: https://spooool.com/sitemap.xml');
+  });
+});
+
+describe('escapeXml', () => {
+  it('escapes the five XML metacharacters', () => {
+    expect(escapeXml(`<a href="x">&'</a>`)).toBe(
+      '&lt;a href=&quot;x&quot;&gt;&amp;&apos;&lt;/a&gt;',
+    );
+  });
+});
+
+describe('toW3CDate', () => {
+  it('returns undefined for missing values', () => {
+    expect(toW3CDate(null)).toBeUndefined();
+    expect(toW3CDate(undefined)).toBeUndefined();
+    expect(toW3CDate('')).toBeUndefined();
+  });
+
+  it('normalizes SQLite CURRENT_TIMESTAMP into W3C UTC', () => {
+    expect(toW3CDate('2026-04-30 12:34:56')).toBe('2026-04-30T12:34:56Z');
+  });
+
+  it('passes through ISO-8601 timestamps', () => {
+    expect(toW3CDate('2026-04-30T12:34:56Z')).toBe('2026-04-30T12:34:56Z');
+    expect(toW3CDate('2026-04-30T12:34:56.789Z')).toBe('2026-04-30T12:34:56Z');
+  });
+
+  it('returns undefined for unparseable values', () => {
+    expect(toW3CDate('not-a-date')).toBeUndefined();
+  });
+});
+
+describe('renderSitemap', () => {
+  it('emits a valid urlset envelope', () => {
+    const xml = renderSitemap([{ loc: 'https://spooool.com/' }]);
+    expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+    expect(xml).toContain('<loc>https://spooool.com/</loc>');
+    expect(xml.trimEnd().endsWith('</urlset>')).toBe(true);
+  });
+
+  it('emits optional lastmod / changefreq / priority when provided', () => {
+    const xml = renderSitemap([
+      {
+        loc: 'https://spooool.com/watch/abc',
+        lastmod: '2026-04-30T12:34:56Z',
+        changefreq: 'weekly',
+        priority: 0.7,
+      },
+    ]);
+    expect(xml).toContain('<lastmod>2026-04-30T12:34:56Z</lastmod>');
+    expect(xml).toContain('<changefreq>weekly</changefreq>');
+    expect(xml).toContain('<priority>0.7</priority>');
+  });
+
+  it('omits optional fields when not provided', () => {
+    const xml = renderSitemap([{ loc: 'https://spooool.com/' }]);
+    expect(xml).not.toContain('<lastmod>');
+    expect(xml).not.toContain('<changefreq>');
+    expect(xml).not.toContain('<priority>');
+  });
+
+  it('clamps priority into [0, 1] with one decimal', () => {
+    const xml = renderSitemap([
+      { loc: 'https://x.test/a', priority: 5 },
+      { loc: 'https://x.test/b', priority: -2 },
+    ]);
+    expect(xml).toContain('<priority>1.0</priority>');
+    expect(xml).toContain('<priority>0.0</priority>');
+  });
+
+  it('escapes XML metacharacters in loc values', () => {
+    const xml = renderSitemap([
+      { loc: 'https://x.test/?q=a&b=<tag>' },
+    ]);
+    expect(xml).toContain('<loc>https://x.test/?q=a&amp;b=&lt;tag&gt;</loc>');
+  });
+});
+
+describe('seoRoutes — /robots.txt', () => {
+  it('serves robots.txt with the request origin', async () => {
+    const env: SeoEnv = { DB: {} as D1Database };
+    const res = await seoRoutes.request('/robots.txt', {}, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/plain');
+    expect(res.headers.get('cache-control')).toContain('max-age=86400');
+    const body = await res.text();
+    expect(body).toContain('Sitemap: http://localhost/sitemap.xml');
+  });
+});
+
+interface FakePrepared {
+  bind: (...values: unknown[]) => FakePrepared;
+  all: () => Promise<{ results: unknown[] }>;
+}
+
+function fakeDB(rows: {
+  videos: Array<{ id: string; updated_at: string }>;
+  channels: Array<{ username: string; updated_at: string }>;
+}): D1Database {
+  const stmt = (sql: string): FakePrepared => {
+    const trimmed = sql.replace(/\s+/g, ' ').trim();
+    const isVideos = trimmed.startsWith('SELECT id, updated_at FROM videos');
+    const api: FakePrepared = {
+      bind: () => api,
+      all: async () => ({ results: isVideos ? rows.videos : rows.channels }),
+    };
+    return api;
+  };
+  return { prepare: stmt } as unknown as D1Database;
+}
+
+describe('seoRoutes — /sitemap.xml', () => {
+  it('lists the home page, search, ready videos, and channels with videos', async () => {
+    const env: SeoEnv = {
+      DB: fakeDB({
+        videos: [
+          { id: 'video-1', updated_at: '2026-04-30 11:00:00' },
+          { id: 'video & special', updated_at: '2026-04-29 11:00:00' },
+        ],
+        channels: [{ username: 'alice', updated_at: '2026-04-30 12:00:00' }],
+      }),
+    };
+    const res = await seoRoutes.request('/sitemap.xml', {}, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/xml');
+    expect(res.headers.get('cache-control')).toContain('max-age=3600');
+
+    const body = await res.text();
+    expect(body).toContain('<loc>http://localhost/</loc>');
+    expect(body).toContain('<loc>http://localhost/search</loc>');
+    expect(body).toContain('<loc>http://localhost/watch/video-1</loc>');
+    // url-encodes path segments to keep the XML well-formed
+    expect(body).toContain('<loc>http://localhost/watch/video%20%26%20special</loc>');
+    expect(body).toContain('<loc>http://localhost/channel/alice</loc>');
+    expect(body).toContain('<lastmod>2026-04-30T11:00:00Z</lastmod>');
+  });
+
+  it('still serves a valid sitemap when there are no videos or channels', async () => {
+    const env: SeoEnv = { DB: fakeDB({ videos: [], channels: [] }) };
+    const res = await seoRoutes.request('/sitemap.xml', {}, env);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('<urlset');
+    expect(body).toContain('<loc>http://localhost/</loc>');
+    expect(body).toContain('<loc>http://localhost/search</loc>');
+  });
+});
