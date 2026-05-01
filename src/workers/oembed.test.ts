@@ -1,0 +1,229 @@
+import { describe, expect, it } from 'vitest';
+import {
+  buildOembedLinkResponse,
+  extractWatchId,
+  oembedRoutes,
+  type OembedEnv,
+} from './oembed';
+
+describe('extractWatchId', () => {
+  it('extracts a watch id when host and path match', () => {
+    expect(extractWatchId('https://spooool.com/watch/abc123', 'spooool.com')).toBe('abc123');
+  });
+
+  it('decodes percent-encoded segments', () => {
+    expect(extractWatchId('https://spooool.com/watch/abc%20def', 'spooool.com')).toBe('abc def');
+  });
+
+  it('is host-comparison case-insensitive', () => {
+    expect(extractWatchId('https://Spooool.com/watch/abc', 'spooool.com')).toBe('abc');
+  });
+
+  it('rejects URLs from a different host', () => {
+    expect(extractWatchId('https://evil.example/watch/abc', 'spooool.com')).toBeNull();
+  });
+
+  it('rejects non-/watch paths', () => {
+    expect(extractWatchId('https://spooool.com/channel/alice', 'spooool.com')).toBeNull();
+    expect(extractWatchId('https://spooool.com/', 'spooool.com')).toBeNull();
+  });
+
+  it('rejects extra path segments', () => {
+    expect(extractWatchId('https://spooool.com/watch/abc/extra', 'spooool.com')).toBeNull();
+  });
+
+  it('rejects malformed URLs', () => {
+    expect(extractWatchId('not a url', 'spooool.com')).toBeNull();
+  });
+
+  it('rejects empty or oversized ids', () => {
+    expect(extractWatchId('https://spooool.com/watch/', 'spooool.com')).toBeNull();
+    const long = 'a'.repeat(200);
+    expect(extractWatchId(`https://spooool.com/watch/${long}`, 'spooool.com')).toBeNull();
+  });
+});
+
+describe('buildOembedLinkResponse', () => {
+  it('shapes a complete response when all fields exist', () => {
+    const out = buildOembedLinkResponse({
+      origin: 'https://spooool.com',
+      video: {
+        title: 'My Video',
+        thumbnail_url: 'https://thumbs.example/abc.jpg',
+        channel_name: 'Alice',
+        channel_username: 'alice',
+      },
+    });
+    expect(out).toEqual({
+      type: 'link',
+      version: '1.0',
+      provider_name: 'spooool',
+      provider_url: 'https://spooool.com',
+      title: 'My Video',
+      author_name: 'Alice',
+      author_url: 'https://spooool.com/channel/alice',
+      thumbnail_url: 'https://thumbs.example/abc.jpg',
+      thumbnail_width: 1280,
+      thumbnail_height: 720,
+      cache_age: 300,
+    });
+  });
+
+  it('omits thumbnail fields when no thumbnail is set', () => {
+    const out = buildOembedLinkResponse({
+      origin: 'https://spooool.com',
+      video: {
+        title: 'My Video',
+        thumbnail_url: null,
+        channel_name: 'Alice',
+        channel_username: 'alice',
+      },
+    });
+    expect(out.thumbnail_url).toBeUndefined();
+    expect(out.thumbnail_width).toBeUndefined();
+    expect(out.thumbnail_height).toBeUndefined();
+  });
+
+  it('falls back to provider origin when channel username is missing', () => {
+    const out = buildOembedLinkResponse({
+      origin: 'https://spooool.com',
+      video: {
+        title: 'V',
+        thumbnail_url: null,
+        channel_name: null,
+        channel_username: null,
+      },
+    });
+    expect(out.author_url).toBe('https://spooool.com');
+    expect(out.author_name).toBe('');
+  });
+
+  it('percent-encodes the channel username in author_url', () => {
+    const out = buildOembedLinkResponse({
+      origin: 'https://spooool.com',
+      video: {
+        title: 'V',
+        thumbnail_url: null,
+        channel_name: 'Alice & Bob',
+        channel_username: 'alice & bob',
+      },
+    });
+    expect(out.author_url).toBe('https://spooool.com/channel/alice%20%26%20bob');
+  });
+});
+
+interface FakePrepared {
+  bind: (...values: unknown[]) => FakePrepared;
+  first: <T>() => Promise<T | null>;
+}
+
+function fakeDB(row: Record<string, unknown> | null): D1Database {
+  const stmt = (): FakePrepared => {
+    const api: FakePrepared = {
+      bind: () => api,
+      first: async () => row as never,
+    };
+    return api;
+  };
+  return { prepare: stmt } as unknown as D1Database;
+}
+
+describe('oembedRoutes — /api/oembed', () => {
+  it('400s when url query is missing or invalid', async () => {
+    const env: OembedEnv = { DB: fakeDB(null) };
+    const res = await oembedRoutes.request('/api/oembed', {}, env);
+    expect(res.status).toBe(400);
+    const bad = await oembedRoutes.request('/api/oembed?url=not-a-url', {}, env);
+    expect(bad.status).toBe(400);
+  });
+
+  it('404s when the URL is not a watch page on this host', async () => {
+    const env: OembedEnv = { DB: fakeDB(null) };
+    const res = await oembedRoutes.request(
+      '/api/oembed?url=https%3A%2F%2Fevil.example%2Fwatch%2Fabc',
+      {},
+      env,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('404s when the video does not exist', async () => {
+    const env: OembedEnv = { DB: fakeDB(null) };
+    const res = await oembedRoutes.request(
+      '/api/oembed?url=http%3A%2F%2Flocalhost%2Fwatch%2Fmissing',
+      {},
+      env,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('hides DMCA-disabled and hidden videos', async () => {
+    const hiddenEnv: OembedEnv = {
+      DB: fakeDB({
+        id: 'abc',
+        title: 'T',
+        thumbnail_url: null,
+        channel_name: 'A',
+        channel_username: 'a',
+        hidden_at: '2026-04-01 00:00:00',
+        dmca_status: null,
+        deleted_at: null,
+      }),
+    };
+    const hiddenRes = await oembedRoutes.request(
+      '/api/oembed?url=http%3A%2F%2Flocalhost%2Fwatch%2Fabc',
+      {},
+      hiddenEnv,
+    );
+    expect(hiddenRes.status).toBe(404);
+
+    const dmcaEnv: OembedEnv = {
+      DB: fakeDB({
+        id: 'abc',
+        title: 'T',
+        thumbnail_url: null,
+        channel_name: 'A',
+        channel_username: 'a',
+        hidden_at: null,
+        dmca_status: 'disabled',
+        deleted_at: null,
+      }),
+    };
+    const dmcaRes = await oembedRoutes.request(
+      '/api/oembed?url=http%3A%2F%2Flocalhost%2Fwatch%2Fabc',
+      {},
+      dmcaEnv,
+    );
+    expect(dmcaRes.status).toBe(404);
+  });
+
+  it('returns a link-type oEmbed payload for a public video', async () => {
+    const env: OembedEnv = {
+      DB: fakeDB({
+        id: 'abc',
+        title: 'Hello',
+        thumbnail_url: 'https://thumbs.example/abc.jpg',
+        channel_name: 'Alice',
+        channel_username: 'alice',
+        hidden_at: null,
+        dmca_status: null,
+        deleted_at: null,
+      }),
+    };
+    const res = await oembedRoutes.request(
+      '/api/oembed?url=http%3A%2F%2Flocalhost%2Fwatch%2Fabc',
+      {},
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toContain('max-age=300');
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.type).toBe('link');
+    expect(body.version).toBe('1.0');
+    expect(body.provider_name).toBe('spooool');
+    expect(body.title).toBe('Hello');
+    expect(body.author_name).toBe('Alice');
+    expect(body.author_url).toBe('http://localhost/channel/alice');
+    expect(body.thumbnail_url).toBe('https://thumbs.example/abc.jpg');
+  });
+});
