@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildVideoSitemapEntry,
   escapeXml,
   renderRobotsTxt,
   renderSitemap,
   seoRoutes,
   toW3CDate,
+  truncateForSitemap,
   type SeoEnv,
 } from './seo';
 
@@ -93,6 +95,115 @@ describe('renderSitemap', () => {
     ]);
     expect(xml).toContain('<loc>https://x.test/?q=a&amp;b=&lt;tag&gt;</loc>');
   });
+
+  it('omits the xmlns:video namespace when no video metadata is present', () => {
+    const xml = renderSitemap([{ loc: 'https://spooool.com/' }]);
+    expect(xml).not.toContain('xmlns:video');
+  });
+
+  it('declares xmlns:video and emits <video:video> when metadata is present', () => {
+    const xml = renderSitemap([
+      {
+        loc: 'https://spooool.com/watch/abc',
+        video: {
+          thumbnail_loc: 'https://spooool.com/thumb/abc.jpg',
+          title: 'Hello',
+          description: 'A short description.',
+          content_loc: 'https://spooool.com/api/videos/abc/stream',
+        },
+      },
+    ]);
+    expect(xml).toContain('xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"');
+    expect(xml).toContain('<video:video>');
+    expect(xml).toContain('<video:thumbnail_loc>https://spooool.com/thumb/abc.jpg</video:thumbnail_loc>');
+    expect(xml).toContain('<video:title>Hello</video:title>');
+    expect(xml).toContain('<video:description>A short description.</video:description>');
+    expect(xml).toContain('<video:content_loc>https://spooool.com/api/videos/abc/stream</video:content_loc>');
+    expect(xml).toContain('</video:video>');
+  });
+
+  it('escapes metacharacters inside <video:video> fields', () => {
+    const xml = renderSitemap([
+      {
+        loc: 'https://x.test/watch/1',
+        video: {
+          thumbnail_loc: 'https://x.test/t.jpg?a=1&b=2',
+          title: '<bad>',
+          description: 'a & b',
+          content_loc: 'https://x.test/api/videos/1/stream?q=&r',
+        },
+      },
+    ]);
+    expect(xml).toContain('<video:title>&lt;bad&gt;</video:title>');
+    expect(xml).toContain('<video:description>a &amp; b</video:description>');
+    expect(xml).toContain('<video:thumbnail_loc>https://x.test/t.jpg?a=1&amp;b=2</video:thumbnail_loc>');
+    expect(xml).toContain(
+      '<video:content_loc>https://x.test/api/videos/1/stream?q=&amp;r</video:content_loc>',
+    );
+  });
+
+  it('truncates over-long titles and descriptions to Google sitemap limits', () => {
+    const longTitle = 'a'.repeat(150);
+    const longDesc = 'b'.repeat(3000);
+    const xml = renderSitemap([
+      {
+        loc: 'https://x.test/watch/1',
+        video: {
+          thumbnail_loc: 'https://x.test/t.jpg',
+          title: longTitle,
+          description: longDesc,
+          content_loc: 'https://x.test/api/videos/1/stream',
+        },
+      },
+    ]);
+    expect(xml).toContain(`<video:title>${'a'.repeat(100)}</video:title>`);
+    expect(xml).toContain(`<video:description>${'b'.repeat(2048)}</video:description>`);
+  });
+});
+
+describe('truncateForSitemap', () => {
+  it('returns the input untouched when shorter than the cap', () => {
+    expect(truncateForSitemap('abc', 10)).toBe('abc');
+  });
+
+  it('slices to the cap when longer', () => {
+    expect(truncateForSitemap('abcdef', 3)).toBe('abc');
+  });
+});
+
+describe('buildVideoSitemapEntry', () => {
+  it('returns undefined when the video has no thumbnail', () => {
+    const entry = buildVideoSitemapEntry({
+      origin: 'https://x.test',
+      row: {
+        id: 'v1',
+        title: 't',
+        description: 'd',
+        thumbnail_url: null,
+        updated_at: '2026-04-30T00:00:00Z',
+      },
+    });
+    expect(entry).toBeUndefined();
+  });
+
+  it('builds an entry pointing content_loc at the API stream route when a thumbnail exists', () => {
+    const entry = buildVideoSitemapEntry({
+      origin: 'https://x.test',
+      row: {
+        id: 'v 1',
+        title: 't',
+        description: 'd',
+        thumbnail_url: 'https://x.test/thumb.jpg',
+        updated_at: '2026-04-30T00:00:00Z',
+      },
+    });
+    expect(entry).toEqual({
+      thumbnail_loc: 'https://x.test/thumb.jpg',
+      title: 't',
+      description: 'd',
+      content_loc: 'https://x.test/api/videos/v%201/stream',
+    });
+  });
 });
 
 describe('seoRoutes — /robots.txt', () => {
@@ -112,13 +223,21 @@ interface FakePrepared {
   all: () => Promise<{ results: unknown[] }>;
 }
 
+interface FakeVideoRow {
+  id: string;
+  title?: string;
+  description?: string;
+  thumbnail_url?: string | null;
+  updated_at: string;
+}
+
 function fakeDB(rows: {
-  videos: Array<{ id: string; updated_at: string }>;
+  videos: Array<FakeVideoRow>;
   channels: Array<{ username: string; updated_at: string }>;
 }): D1Database {
   const stmt = (sql: string): FakePrepared => {
     const trimmed = sql.replace(/\s+/g, ' ').trim();
-    const isVideos = trimmed.startsWith('SELECT id, updated_at FROM videos');
+    const isVideos = trimmed.startsWith('SELECT id, title, description, thumbnail_url, updated_at FROM videos');
     const api: FakePrepared = {
       bind: () => api,
       all: async () => ({ results: isVideos ? rows.videos : rows.channels }),
@@ -162,5 +281,39 @@ describe('seoRoutes — /sitemap.xml', () => {
     expect(body).toContain('<urlset');
     expect(body).toContain('<loc>http://localhost/</loc>');
     expect(body).toContain('<loc>http://localhost/search</loc>');
+  });
+
+  it('emits <video:video> entries for videos that have a thumbnail', async () => {
+    const env: SeoEnv = {
+      DB: fakeDB({
+        videos: [
+          {
+            id: 'v1',
+            title: 'Hello world',
+            description: 'a description',
+            thumbnail_url: 'https://cdn.spooool.com/t/v1.jpg',
+            updated_at: '2026-04-30 11:00:00',
+          },
+          {
+            id: 'v2',
+            title: 'No thumb',
+            description: 'd',
+            thumbnail_url: null,
+            updated_at: '2026-04-29 10:00:00',
+          },
+        ],
+        channels: [],
+      }),
+    };
+    const res = await seoRoutes.request('/sitemap.xml', {}, env);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"');
+    expect(body).toContain('<video:title>Hello world</video:title>');
+    expect(body).toContain('<video:thumbnail_loc>https://cdn.spooool.com/t/v1.jpg</video:thumbnail_loc>');
+    expect(body).toContain('<video:content_loc>http://localhost/api/videos/v1/stream</video:content_loc>');
+    // v2 has no thumbnail → it appears as a plain <url> entry, not a <video:video>.
+    expect(body).toContain('<loc>http://localhost/watch/v2</loc>');
+    expect(body).not.toMatch(/<video:title>No thumb<\/video:title>/);
   });
 });
