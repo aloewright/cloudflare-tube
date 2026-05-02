@@ -4,17 +4,29 @@ export interface SeoEnv {
   DB: D1Database;
 }
 
+export interface VideoSitemapEntry {
+  thumbnail_loc: string;
+  title: string;
+  description: string;
+  content_loc: string;
+}
+
 export interface SitemapUrl {
   loc: string;
   lastmod?: string;
   changefreq?: 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
   priority?: number;
+  video?: VideoSitemapEntry;
 }
 
 const MAX_VIDEO_URLS = 5000;
 const MAX_CHANNEL_URLS = 1000;
 const SITEMAP_CACHE_SECONDS = 3600;
 const ROBOTS_CACHE_SECONDS = 86400;
+// Google video sitemap limits: title <=100 chars, description <=2048 chars.
+// https://developers.google.com/search/docs/crawling-indexing/sitemaps/video-sitemaps
+const VIDEO_TITLE_MAX = 100;
+const VIDEO_DESCRIPTION_MAX = 2048;
 
 export function renderRobotsTxt(origin: string): string {
   return [
@@ -48,10 +60,21 @@ export function toW3CDate(value: string | null | undefined): string | undefined 
   return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+export function truncateForSitemap(value: string, max: number): string {
+  if (value.length <= max) return value;
+  return value.slice(0, max);
+}
+
 export function renderSitemap(urls: SitemapUrl[]): string {
+  const hasVideo = urls.some((u) => u.video);
+  const urlsetAttrs = hasVideo
+    ? ' xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"' +
+      ' xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"'
+    : ' xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"';
+
   const lines: string[] = [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    `<urlset${urlsetAttrs}>`,
   ];
   for (const u of urls) {
     lines.push('  <url>');
@@ -61,6 +84,16 @@ export function renderSitemap(urls: SitemapUrl[]): string {
     if (typeof u.priority === 'number') {
       const clamped = Math.max(0, Math.min(1, u.priority));
       lines.push(`    <priority>${clamped.toFixed(1)}</priority>`);
+    }
+    if (u.video) {
+      lines.push('    <video:video>');
+      lines.push(`      <video:thumbnail_loc>${escapeXml(u.video.thumbnail_loc)}</video:thumbnail_loc>`);
+      lines.push(`      <video:title>${escapeXml(truncateForSitemap(u.video.title, VIDEO_TITLE_MAX))}</video:title>`);
+      lines.push(
+        `      <video:description>${escapeXml(truncateForSitemap(u.video.description, VIDEO_DESCRIPTION_MAX))}</video:description>`,
+      );
+      lines.push(`      <video:content_loc>${escapeXml(u.video.content_loc)}</video:content_loc>`);
+      lines.push('    </video:video>');
     }
     lines.push('  </url>');
   }
@@ -82,19 +115,43 @@ seoRoutes.get('/robots.txt', (c) => {
   });
 });
 
+interface SitemapVideoRow {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail_url: string | null;
+  updated_at: string;
+}
+
+export function buildVideoSitemapEntry(args: {
+  origin: string;
+  row: SitemapVideoRow;
+}): VideoSitemapEntry | undefined {
+  const { origin, row } = args;
+  if (!row.thumbnail_url) return undefined;
+  // content_loc must point to the actual media bytes. The /api/videos/:id/stream
+  // route serves the R2 object directly with Range support, which Google accepts.
+  return {
+    thumbnail_loc: row.thumbnail_url,
+    title: row.title,
+    description: row.description ?? '',
+    content_loc: `${origin}/api/videos/${encodeURIComponent(row.id)}/stream`,
+  };
+}
+
 seoRoutes.get('/sitemap.xml', async (c) => {
   const origin = new URL(c.req.url).origin;
 
   const [videoRows, channelRows] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT id, updated_at FROM videos
+      `SELECT id, title, description, thumbnail_url, updated_at FROM videos
        WHERE deleted_at IS NULL AND hidden_at IS NULL AND status = 'ready'
          AND (dmca_status IS NULL OR dmca_status != 'disabled')
        ORDER BY updated_at DESC
        LIMIT ?`,
     )
       .bind(MAX_VIDEO_URLS)
-      .all<{ id: string; updated_at: string }>(),
+      .all<SitemapVideoRow>(),
     c.env.DB.prepare(
       `SELECT u.username AS username, MAX(v.updated_at) AS updated_at
        FROM user u
@@ -121,6 +178,7 @@ seoRoutes.get('/sitemap.xml', async (c) => {
       lastmod: toW3CDate(row.updated_at),
       changefreq: 'weekly',
       priority: 0.7,
+      video: buildVideoSitemapEntry({ origin, row }),
     });
   }
   for (const row of channelRows.results ?? []) {

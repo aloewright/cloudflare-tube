@@ -10,6 +10,12 @@ import {
 } from './upload-validation';
 import { VIDEO_META_CACHE_TTL_SECONDS, videoMetaCacheKey } from './video-meta-cache';
 import { parseRangeHeader } from './video-range';
+import {
+  TRENDING_CACHE_TTL_SECONDS,
+  bumpTrendingCacheVersion,
+  getTrendingCacheVersion,
+  trendingCacheKey,
+} from './trending-cache';
 
 interface AnalyticsEngineDataset {
   writeDataPoint(point: { blobs?: string[]; doubles?: number[]; indexes?: string[] }): void;
@@ -27,8 +33,6 @@ export interface VideoRoutesEnv {
 
 type SessionUser = { id: string; email: string; name: string } | null;
 type VideoRoutesVariables = { user: SessionUser };
-
-const TRENDING_CACHE_TTL_SECONDS = 300;
 
 type CachedVideoMeta = {
   id: string;
@@ -81,7 +85,8 @@ videoRoutes.get('/api/videos/trending', async (c) => {
   }
 
   const { limit } = parsed.data;
-  const cacheKey = `trending:v1:limit=${limit}`;
+  const version = await getTrendingCacheVersion(c.env.CACHE);
+  const cacheKey = trendingCacheKey(version, limit);
 
   const cached = await c.env.CACHE.get(cacheKey, 'json');
   if (cached) {
@@ -365,6 +370,7 @@ videoRoutes.post('/api/videos/upload', async (c) => {
       videoId,
       channelUserId: user.id,
     });
+    await bumpTrendingCacheVersion(env.CACHE);
 
     return c.json({ id: videoId, status: 'uploaded' }, 201);
   }
@@ -464,6 +470,7 @@ videoRoutes.post('/api/videos/upload', async (c) => {
     videoId: uploadMeta.videoId,
     channelUserId: user.id,
   });
+  await bumpTrendingCacheVersion(env.CACHE);
 
   await Promise.all([env.SESSIONS.delete(mpidKey), env.SESSIONS.delete(metaKey), env.SESSIONS.delete(partsKey)]);
 
@@ -495,6 +502,7 @@ videoRoutes.delete('/api/videos/:id', async (c) => {
 
   await c.env.VIDEOS.delete(video.r2_key);
   await c.env.CACHE.delete(videoMetaCacheKey(id));
+  await bumpTrendingCacheVersion(c.env.CACHE);
 
   return c.json({ success: true });
 });
